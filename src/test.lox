@@ -1,0 +1,29 @@
+// Comment
+
+class Wrapper {
+    init(fn) {
+        this.fn = fn;
+    }
+
+    run() {
+        print "start";
+        this.fn();
+        print "stop";
+    }
+}
+
+class Unwrapper < Wrapper {
+    get_fn() {
+        return super.fn;
+    }
+}
+
+fun test() { print "running"; }
+var wrapped = Wrapper(test);
+wrapped.run();
+
+fun test2() { print 1.23; }
+var unwrapper = Unwrapper(test);
+unwrapper.run();
+var unwrapped_fn = unwrapper.get_fn();
+unwrapped_fn();
