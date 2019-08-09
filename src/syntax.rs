@@ -1,33 +1,30 @@
-use crate::tokens::{Token, Value};
+use crate::{
+    tokens::{Token, Value},
+    visitor::Visitor,
+};
 
 macro_rules! ast_gen {
     ( $vis:vis enum $name:ident
         { $( $variant:ident ( $( $typename:ident : $types:ty ),* $(,)? ) ,)* }
     ) => {
-            $(
-                #[derive(Debug)]
-                pub struct $variant{ $(pub $typename: $types),* }
-
-                // impl<V: Visitor<Self, R>, R> Visit<V, R> for $variant {
-                //     fn accept(&mut self, v: &mut V) -> R { v.visit(self) }
-                // }
-            )*
+        $(
+            #[derive(Debug)]
+            pub struct $variant{ $(pub $typename: $types),* }
+        )*
 
         #[derive(Debug)]
         $vis enum $name { $($variant($variant)),* }
 
-        // impl<V: Visitor<Self, R>, R> Visit<V, R> for $name
-        // where
-        //     $(V: Visitor<$variant, R>),*
-        // {
-        //     fn accept(&mut self, f: &mut V) -> R {
-        //         match self {
-        //             $( $name::$variant(e) => {
-        //                 e.accept(f)
-        //             } ),*
-        //         }
-        //     }
-        // }
+        impl<R, V> Visitor<$name, R> for V
+        where
+            $(V: Visitor<$variant, R>),*
+        {
+            fn visit(&mut self, t: &mut $name) -> R {
+                match t {
+                    $($name::$variant(inner) => self.visit(inner)),*
+                }
+            }
+        }
     };
 }
 

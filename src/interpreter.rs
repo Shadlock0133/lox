@@ -44,18 +44,6 @@ impl fmt::Display for RuntimeError {
 
 impl std::error::Error for RuntimeError {}
 
-impl Visitor<Expr, Result<Value, RuntimeError>> for Interpreter {
-    fn visit(&mut self, expr: &mut Expr) -> Result<Value, RuntimeError> {
-        match expr {
-            Expr::Binary(inner) => self.visit(inner),
-            Expr::Unary(inner) => self.visit(inner),
-            Expr::Grouping(inner) => self.visit(inner),
-            Expr::Literal(inner) => self.visit(inner),
-            Expr::Variable(inner) => self.visit(inner),
-        }
-    }
-}
-
 impl Visitor<Binary, Result<Value, RuntimeError>> for Interpreter {
     fn visit(&mut self, t: &mut Binary) -> Result<Value, RuntimeError> {
         fn num_op<F: Fn(f64, f64) -> Value>(
@@ -133,16 +121,6 @@ impl Visitor<Unary, Result<Value, RuntimeError>> for Interpreter {
 impl Visitor<Variable, Result<Value, RuntimeError>> for Interpreter {
     fn visit(&mut self, t: &mut Variable) -> Result<Value, RuntimeError> {
         self.environment.get(&t.name)
-    }
-}
-
-impl Visitor<Stmt, Result<(), RuntimeError>> for Interpreter {
-    fn visit(&mut self, t: &mut Stmt) -> Result<(), RuntimeError> {
-        match t {
-            Stmt::Expression(inner) => self.visit(inner),
-            Stmt::PrintStmt(inner) => self.visit(inner),
-            Stmt::Var(inner) => self.visit(inner),
-        }
     }
 }
 
