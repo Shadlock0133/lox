@@ -10,6 +10,7 @@ use std::{
     rc::Rc,
 };
 
+mod environment;
 mod interpreter;
 mod parser;
 mod syntax;
@@ -18,7 +19,6 @@ mod visitor;
 use interpreter::*;
 use parser::*;
 use tokens::*;
-use visitor::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = args();
@@ -89,17 +89,18 @@ impl Lox {
         let scanner = Scanner::new(source, Rc::clone(&self.reporter));
         let tokens: Vec<Token> = scanner.collect();
         let mut parser = Parser::new(tokens, Rc::clone(&self.reporter));
-        let expr = parser.parse();
+        let program = parser.parse();
         if self.reporter.borrow().had_error {
             return Ok(());
         }
-        let mut expr = expr.unwrap();
-        let print = Printer.visit(&mut expr);
-        let result = self.interpreter.visit(&mut expr);
+        let result = self.interpreter.interpret(program.unwrap());
         if result.is_err() {
             self.had_runtime_error = true;
         }
-        println!("{} = {:?}", print, result?);
+        let result = result?;
+        if !result.is_empty() {
+            println!("{}", result);
+        }
 
         Ok(())
     }
@@ -110,16 +111,16 @@ pub struct Reporter {
 }
 
 impl Reporter {
-    fn error<S: AsRef<str>>(&mut self, line: u32, message: S) {
-        self.report(line, "".to_owned(), message.as_ref());
+    fn error<S: Into<String>>(&mut self, line: u32, message: S) {
+        self.report(line, "".to_owned(), message);
     }
 
-    fn report<S: AsRef<str>>(&mut self, line: u32, where_: String, message: S) {
-        eprintln!("[line {}] Error{}: {}", line, where_, message.as_ref());
+    fn report<S: Into<String>>(&mut self, line: u32, where_: String, message: S) {
+        eprintln!("[line {}] Error{}: {}", line, where_, message.into());
         self.had_error = true;
     }
 
-    fn with_token<S: AsRef<str>>(&mut self, token: Token, message: S) {
+    fn with_token<S: Into<String>>(&mut self, token: Token, message: S) {
         let where_ = if token.type_ == TokenType::Eof {
             " at end".to_owned()
         } else {

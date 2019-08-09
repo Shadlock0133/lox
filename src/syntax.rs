@@ -1,36 +1,33 @@
-use crate::{
-    tokens::{Token, Value},
-    visitor::{Visit, Visitor},
-};
+use crate::tokens::{Token, Value};
 
 macro_rules! ast_gen {
-    ( $vis:vis enum $name:ident in $modname:ident
-        { $( $variant:ident ( $( $types:ty ),* $(,)? ) ,)* }
+    ( $vis:vis enum $name:ident
+        { $( $variant:ident ( $( $typename:ident : $types:ty ),* $(,)? ) ,)* }
     ) => {
             $(
                 #[derive(Debug)]
-                pub struct $variant( $(pub $types),* );
-                
-                impl<V: Visitor<Self, R>, R> Visit<V, R> for $variant {
-                    fn accept(&mut self, v: &mut V) -> R { v.visit(self) }
-                }
+                pub struct $variant{ $(pub $typename: $types),* }
+
+                // impl<V: Visitor<Self, R>, R> Visit<V, R> for $variant {
+                //     fn accept(&mut self, v: &mut V) -> R { v.visit(self) }
+                // }
             )*
 
         #[derive(Debug)]
         $vis enum $name { $($variant($variant)),* }
 
-        impl<V: Visitor<Self, R>, R> Visit<V, R> for $name
-        where
-            $(V: Visitor<$variant, R>),*
-        {
-            fn accept(&mut self, f: &mut V) -> R {
-                match self {
-                    $( $name::$variant(e) => {
-                        e.accept(f)
-                    } ),*
-                }
-            }
-        }
+        // impl<V: Visitor<Self, R>, R> Visit<V, R> for $name
+        // where
+        //     $(V: Visitor<$variant, R>),*
+        // {
+        //     fn accept(&mut self, f: &mut V) -> R {
+        //         match self {
+        //             $( $name::$variant(e) => {
+        //                 e.accept(f)
+        //             } ),*
+        //         }
+        //     }
+        // }
     };
 }
 
@@ -40,35 +37,64 @@ macro_rules! ast_gen {
 // (outside enum, in new module) struct Name(Field1, Field2);
 // It also implements Visit trait on sub-structs and main enum
 ast_gen! {
-    pub enum Expr in expr {
-        Binary(Token, Box<Expr>, Box<Expr>),
-        Grouping(Box<Expr>),
-        Literal(Value),
-        Unary(Token, Box<Expr>),
+    pub enum Expr {
+        Binary(op: Token, left: Box<Expr>, right: Box<Expr>),
+        Unary(op: Token, right: Box<Expr>),
+        Grouping(expr: Box<Expr>),
+        Literal(value: Value),
+        Variable(name: Token),
     }
 }
 
 impl Expr {
     pub fn binary(op: Token, left: Expr, right: Expr) -> Self {
-        Expr::Binary(Binary(op, Box::new(left), Box::new(right)))
+        Expr::Binary(Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        })
+    }
+
+    pub fn unary(op: Token, right: Expr) -> Expr {
+        Expr::Unary(Unary {
+            op,
+            right: Box::new(right),
+        })
     }
 
     pub fn grouping(expr: Expr) -> Self {
-        Expr::Grouping(Grouping(Box::new(expr)))
+        Expr::Grouping(Grouping {
+            expr: Box::new(expr),
+        })
     }
 
-    pub fn literal(literal: Value) -> Self {
-        Expr::Literal(Literal(literal))
+    pub fn literal(value: Value) -> Self {
+        Expr::Literal(Literal { value })
     }
 
-    pub fn unary(token: Token, expr: Expr) -> Expr {
-        Expr::Unary(Unary(token, Box::new(expr)))
+    pub fn variable(name: Token) -> Self {
+        Expr::Variable(Variable { name })
     }
 }
 
 ast_gen! {
-    pub enum Stmt in stmt {
-        Expression(Expr),
-        PrintStmt(Expr),
+    pub enum Stmt {
+        Expression(expr: Expr),
+        PrintStmt(expr: Expr),
+        Var(name: Token, init: Option<Expr>),
+    }
+}
+
+impl Stmt {
+    pub fn expression(expr: Expr) -> Self {
+        Stmt::Expression(Expression { expr })
+    }
+
+    pub fn print(expr: Expr) -> Self {
+        Stmt::PrintStmt(PrintStmt { expr })
+    }
+
+    pub fn var(name: Token, init: Option<Expr>) -> Self {
+        Stmt::Var(Var { name, init })
     }
 }

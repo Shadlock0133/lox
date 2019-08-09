@@ -69,12 +69,12 @@ impl Parser {
         false
     }
 
-    fn error<S: AsRef<str>>(&mut self, token: Token, message: S) -> ParseError {
+    fn error<S: Into<std::string::String>>(&mut self, token: Token, message: S) -> ParseError {
         self.reporter.borrow_mut().with_token(token, message);
         ParseError
     }
 
-    fn consume<S: AsRef<str>>(
+    fn consume<S: Into<std::string::String>>(
         &mut self,
         type_: TokenType,
         message: S,
@@ -99,8 +99,55 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, ParseError> {
-        self.expression()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut statements = Vec::new();
+        while !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+        Ok(statements)
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        (|| {
+            if self.match_(&[Var]) {
+                return self.var_declaration();
+            }
+            self.statement()
+        })()
+        .map_err(|x| {
+            self.synchronize();
+            x
+        })
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(Identifier, "Expect variable name")?;
+        let init = if self.match_(&[Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(Semicolon, "Expect ';' after variable statement")?;
+        Ok(Stmt::var(name, init))
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_(&[Print]) {
+            return self.print_statement();
+        }
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Expect ';' after value")?;
+        Ok(Stmt::print(expr))
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Expect ';' after value")?;
+        Ok(Stmt::expression(expr))
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
@@ -181,6 +228,9 @@ impl Parser {
                     .literal
                     .ok_or_else(|| self.error(self.peek(), "Missing literal"))?,
             ));
+        }
+        if self.match_(&[Identifier]) {
+            return Ok(Expr::variable(self.previous()));
         }
         if self.match_(&[LeftParen]) {
             let expr = self.expression()?;
