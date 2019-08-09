@@ -1,26 +1,52 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fmt,
-    rc::Rc,
-};
 use crate::Reporter;
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum TokenType {
-    LeftParen, RightParen, LeftBrace, RightBrace,
-    Comma, Dot, Minus, Plus, Semicolon, Slash, Star,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    DotDot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
 
-    Bang, BangEqual,
-    Equal, EqualEqual,
-    Greater, GreaterEqual,
-    Less, LessEqual,
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 
-    Identifier, String, Number,
+    Identifier,
+    String,
+    Number,
 
-    And, Class, Else, False, Fun, For, If, Nil, Or,
-    Print, Return, Super, This, True, Var, While,
+    And,
+    Class,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    In,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
 
     Eof,
 }
@@ -54,31 +80,41 @@ pub enum Value {
     Nil,
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Number(l), Value::Number(r)) if l.is_nan() && r.is_nan() => true,
+            (Value::Nil, Value::Nil) => true,
+            (Value::Number(l), Value::Number(r)) => l == r,
+            (Value::String(l), Value::String(r)) => l == r,
+            (Value::Bool(l), Value::Bool(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::String(s) => write!(f, "\"{}\"", s),
+            Value::Number(n) => write!(f, "{}", n),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
+}
+
 impl Value {
-    pub fn as_number(self) -> Option<f64> {
+    pub fn as_number(&self) -> Option<f64> {
         match self {
-            Value::Number(n) => Some(n),
+            Value::Number(n) => Some(*n),
             _ => None,
         }
     }
 
-    pub fn as_string(self) -> Option<String> {
+    pub fn is_truthy(&self) -> bool {
         match self {
-            Value::String(n) => Some(n),
-            _ => None,
-        }
-    }
-
-    pub fn as_bool(self) -> Option<bool> {
-        match self {
-            Value::Bool(n) => Some(n),
-            _ => None,
-        }
-    }
-
-    pub fn is_truthy(self) -> bool {
-        match self {
-            Value::Bool(b) => b,
+            Value::Bool(b) => *b,
             Value::Nil => false,
             _ => true,
         }
@@ -88,15 +124,9 @@ impl Value {
 #[derive(Debug, Clone)]
 pub struct Token {
     pub type_: TokenType,
-    pub lexeme: String, 
+    pub lexeme: String,
     pub literal: Option<Value>,
     pub line: u32,
-}
-
-impl Token {
-    pub fn new(type_: TokenType, lexeme: String, literal: Option<Value>, line: u32) -> Self {
-        Self { type_, lexeme, literal, line, }
-    }
 }
 
 impl fmt::Display for Token {
@@ -129,6 +159,7 @@ impl Scanner {
         keywords.insert("for".into(), TokenType::For);
         keywords.insert("fun".into(), TokenType::Fun);
         keywords.insert("if".into(), TokenType::If);
+        keywords.insert("in".into(), TokenType::In);
         keywords.insert("nil".into(), TokenType::Nil);
         keywords.insert("or".into(), TokenType::Or);
         keywords.insert("print".into(), TokenType::Print);
@@ -140,7 +171,9 @@ impl Scanner {
         keywords.insert("while".into(), TokenType::While);
 
         Self {
-            source, reporter, keywords,
+            source,
+            reporter,
+            keywords,
             start: 0,
             current: 0,
             line: 1,
@@ -149,7 +182,9 @@ impl Scanner {
     }
 
     fn advance(&mut self) -> char {
-        let char = self.source.get(self.current..)
+        let char = self
+            .source
+            .get(self.current..)
             .and_then(|x| x.chars().next())
             .unwrap_or('\0');
         self.current += char.len_utf8();
@@ -166,13 +201,15 @@ impl Scanner {
     }
 
     fn peek(&self) -> char {
-        self.source.get(self.current..)
+        self.source
+            .get(self.current..)
             .and_then(|x| x.chars().next())
             .unwrap_or('\0')
     }
 
     fn peek_next(&self) -> char {
-        self.source.get(self.current..)
+        self.source
+            .get(self.current..)
             .and_then(|x| x.chars().nth(1))
             .unwrap_or('\0')
     }
@@ -180,7 +217,9 @@ impl Scanner {
     // TODO: Add quote escaping for fun and profit
     fn string(&mut self) -> Option<String> {
         while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' { self.line += 1; }
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
             self.advance();
         }
 
@@ -193,11 +232,15 @@ impl Scanner {
     }
 
     fn number(&mut self) -> f64 {
-        while self.peek().is_ascii_digit() { self.advance(); }
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
 
         if self.peek() == '.' && self.peek_next().is_ascii_digit() {
             self.advance();
-            while self.peek().is_ascii_digit() { self.advance(); }
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
         }
 
         self.source[self.start..self.current].parse().unwrap()
@@ -213,7 +256,12 @@ impl Scanner {
 
     fn new_token(&self, type_: TokenType, literal: Option<Value>) -> Token {
         let lexeme = self.source[self.start..self.current].to_owned();
-        Token { type_, literal, lexeme, line: self.line, }
+        Token {
+            type_,
+            literal,
+            lexeme,
+            line: self.line,
+        }
     }
 
     fn get_token(&mut self) -> Result<Result<Token, SkipToken>, TokenError> {
@@ -232,7 +280,7 @@ impl Scanner {
             '{' => Ok(Ok(self.new_token_from_type(LeftBrace))),
             '}' => Ok(Ok(self.new_token_from_type(RightBrace))),
             ',' => Ok(Ok(self.new_token_from_type(Comma))),
-            '.' => Ok(Ok(self.new_token_from_type(Dot))),
+            '.' => Ok(Ok(self.new_token_from_type(Dot))), // TODO: Add DotDot detection
             '-' => Ok(Ok(self.new_token_from_type(Minus))),
             '+' => Ok(Ok(self.new_token_from_type(Plus))),
             ';' => Ok(Ok(self.new_token_from_type(Semicolon))),
@@ -246,7 +294,11 @@ impl Scanner {
                 self.new_token_from_type(type_)
             })),
             '>' => Ok(Ok({
-                let type_ = if self.match_('=') { GreaterEqual } else { Greater };
+                let type_ = if self.match_('=') {
+                    GreaterEqual
+                } else {
+                    Greater
+                };
                 self.new_token_from_type(type_)
             })),
             '<' => Ok(Ok({
@@ -256,25 +308,35 @@ impl Scanner {
             '/' => {
                 if self.match_('/') {
                     // We are reading a comment, skip to end of line
-                    while self.peek() != '\n' && !self.is_at_end() { self.advance(); }
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
                     Ok(Err(SkipToken::Comment))
                 } else {
                     Ok(Ok(self.new_token_from_type(Slash)))
                 }
             }
             ' ' | '\r' | '\t' => Ok(Err(SkipToken::Whitespace)),
-            '\n' => { self.line += 1; Ok(Err(SkipToken::Whitespace)) },
+            '\n' => {
+                self.line += 1;
+                Ok(Err(SkipToken::Whitespace))
+            }
             '"' => {
                 let string = self.string().ok_or(TokenError::UnterminatedString)?;
                 Ok(Ok(self.new_token(String, Some(Value::String(string)))))
-            },
+            }
             c if c.is_ascii_digit() => {
                 let number = self.number();
                 Ok(Ok(self.new_token(Number, Some(Value::Number(number)))))
             }
             c if c.is_ascii_alphabetic() => {
-                while self.peek().is_ascii_alphanumeric() || self.peek() == '_' { self.advance(); }
-                let keyword = self.keywords.get(&self.source[self.start..self.current]).unwrap_or(&Identifier);
+                while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+                    self.advance();
+                }
+                let keyword = self
+                    .keywords
+                    .get(&self.source[self.start..self.current])
+                    .unwrap_or(&Identifier);
                 Ok(Ok(self.new_token_from_type(*keyword)))
             }
             c => Err(TokenError::UnexpectedChar(c)),
@@ -285,7 +347,9 @@ impl Scanner {
 impl Iterator for Scanner {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.had_eof { return None; }
+        if self.had_eof {
+            return None;
+        }
         let mut token = self.get_token();
         loop {
             match token {
@@ -307,7 +371,7 @@ impl Iterator for Scanner {
             Ok(Ok(token)) => {
                 // eprintln!("> {}", token);
                 Some(token)
-            },
+            }
             _ => unreachable!(),
         }
     }

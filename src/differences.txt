@@ -1,0 +1,2 @@
+- TODO: Handle quote escaping ("\"") inside strings
+- New keyword `in` and operand `..`. Used in range loops, ie. `for(i in 0..5)`

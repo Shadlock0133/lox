@@ -1,39 +1,26 @@
 #![warn(clippy::all)]
 use std::{
     cell::RefCell,
-    error::Error,
     env::args,
+    error::Error,
     fs,
-    io::{self, Write, BufRead},
+    io::{self, BufRead, Write},
     path::Path,
     process::exit,
     rc::Rc,
 };
 
-mod tokens;
-mod syntax;
-mod parser;
-mod visitor;
 mod interpreter;
-use tokens::*;
-use syntax::*;
-use parser::*;
-use visitor::*;
+mod parser;
+mod syntax;
+mod tokens;
+mod visitor;
 use interpreter::*;
+use parser::*;
+use tokens::*;
+use visitor::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut syntax = Expr::binary(
-        Expr::unary(
-            Token::new(TokenType::Minus, "-".to_owned(), None, 1),
-            Expr::literal(Value::Number(123.0))
-        ),
-        Token::new(TokenType::Star, "*".to_owned(), None, 1),
-        Expr::grouping(
-            Expr::literal(Value::Number(45.67))
-        ),
-    );
-    eprintln!("{}", Printer.visit(&mut syntax));
-
     let mut args = args();
     let input_file = args.nth(1);
     let has_other = args.next().is_some();
@@ -45,29 +32,40 @@ fn main() -> Result<(), Box<dyn Error>> {
         _ => {
             eprintln!(concat!("Usage: ", env!("CARGO_PKG_NAME"), " [script]"));
             exit(64);
-        },
+        }
     }
     Ok(())
 }
 
 struct Lox {
+    interpreter: Interpreter,
     reporter: Rc<RefCell<Reporter>>,
+    had_runtime_error: bool,
 }
 
 impl Lox {
     fn new() -> Self {
         let reporter = Reporter { had_error: false };
-        Self { reporter: Rc::new(RefCell::new(reporter)) }
+        Self {
+            interpreter: Interpreter::new(),
+            reporter: Rc::new(RefCell::new(reporter)),
+            had_runtime_error: false,
+        }
     }
 
     fn run_file<P: AsRef<Path>>(&mut self, file: P) -> Result<(), Box<dyn Error>> {
         let script = fs::read_to_string(file)?;
         self.run(script)?;
-        if self.reporter.borrow().had_error { exit(65); }
+        if self.reporter.borrow().had_error {
+            exit(65);
+        }
+        if self.had_runtime_error {
+            exit(70);
+        }
         Ok(())
     }
 
-    fn run_repl(&mut self, ) -> Result<(), Box<dyn Error>> {
+    fn run_repl(&mut self) -> Result<(), Box<dyn Error>> {
         let stdin = io::stdin();
         let mut reader = io::BufReader::new(stdin.lock());
         loop {
@@ -78,8 +76,12 @@ impl Lox {
 
             let mut input = String::new();
             reader.read_line(&mut input)?;
-            self.run(input)?;
+            let res = self.run(input);
             self.reporter.borrow_mut().had_error = false;
+            if self.had_runtime_error {
+                self.had_runtime_error = false;
+                eprintln!("Runtime error:\n{}", res.unwrap_err());
+            }
         }
     }
 
@@ -88,12 +90,16 @@ impl Lox {
         let tokens: Vec<Token> = scanner.collect();
         let mut parser = Parser::new(tokens, Rc::clone(&self.reporter));
         let expr = parser.parse();
-        if self.reporter.borrow().had_error { return Ok(()) }
+        if self.reporter.borrow().had_error {
+            return Ok(());
+        }
         let mut expr = expr.unwrap();
         let print = Printer.visit(&mut expr);
-        let result = Interpreter.visit(&mut expr);
-        if result.is_err() { return Ok(()); }
-        println!("{} = {:?}", print, result.unwrap());
+        let result = self.interpreter.visit(&mut expr);
+        if result.is_err() {
+            self.had_runtime_error = true;
+        }
+        println!("{} = {:?}", print, result?);
 
         Ok(())
     }
@@ -113,7 +119,7 @@ impl Reporter {
         self.had_error = true;
     }
 
-    fn from_token<S: AsRef<str>>(&mut self, token: Token, message: S) {
+    fn with_token<S: AsRef<str>>(&mut self, token: Token, message: S) {
         let where_ = if token.type_ == TokenType::Eof {
             " at end".to_owned()
         } else {
