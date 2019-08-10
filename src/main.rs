@@ -93,7 +93,9 @@ impl Lox {
         if self.reporter.borrow().had_error {
             return Ok(());
         }
-        let result = self.interpreter.interpret(program.unwrap());
+        let program = program.unwrap();
+        // eprintln!("{:?}", program);
+        let result = self.interpreter.interpret(program);
         if result.is_err() {
             self.had_runtime_error = true;
         }

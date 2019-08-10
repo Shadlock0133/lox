@@ -4,11 +4,15 @@ use crate::{
     tokens::{Token, TokenType, Value},
     visitor::*,
 };
-use std::fmt::{self, Write};
+use std::{
+    cell::RefCell,
+    fmt::{self, Write},
+    rc::Rc,
+};
 
 pub struct Interpreter {
     output: String,
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
@@ -24,6 +28,19 @@ impl Interpreter {
             self.visit(&mut statement)?;
         }
         Ok(std::mem::replace(&mut self.output, String::new()))
+    }
+
+    fn execute_block(&mut self, statements: &mut [Stmt], environment: Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
+        let previous = Rc::clone(&self.environment);
+        let result = (|| {
+            self.environment = environment;
+            for statement in statements {
+                self.visit(statement)?;
+            }
+            Ok(())
+        })();
+        self.environment = previous;
+        result
     }
 }
 
@@ -44,6 +61,14 @@ impl fmt::Display for RuntimeError {
 
 impl std::error::Error for RuntimeError {}
 
+impl Visitor<Assign, Result<Value, RuntimeError>> for Interpreter {
+    fn visit(&mut self, t: &mut Assign) -> Result<Value, RuntimeError> {
+        let value = self.visit(&mut *t.value)?;
+        self.environment.borrow_mut().assign(&t.name, value.clone())?;
+        Ok(value)
+    }
+}
+
 impl Visitor<Binary, Result<Value, RuntimeError>> for Interpreter {
     fn visit(&mut self, t: &mut Binary) -> Result<Value, RuntimeError> {
         fn num_op<F: Fn(f64, f64) -> Value>(
@@ -57,7 +82,17 @@ impl Visitor<Binary, Result<Value, RuntimeError>> for Interpreter {
                 _ => Err(RuntimeError::new(&op, "Operands must be a numbers.")),
             }
         }
+
         let left = self.visit(&mut *t.left)?;
+
+        match t.op.type_ {
+            TokenType::Or if left.is_truthy() => return Ok(left),
+            TokenType::Or if !left.is_truthy() => return self.visit(&mut *t.right),
+            TokenType::And if !left.is_truthy() => return Ok(left),
+            TokenType::And if left.is_truthy() => return self.visit(&mut *t.right),
+            _ => (),
+        }
+
         let right = self.visit(&mut *t.right)?;
 
         match t.op.type_ {
@@ -120,15 +155,13 @@ impl Visitor<Unary, Result<Value, RuntimeError>> for Interpreter {
 
 impl Visitor<Variable, Result<Value, RuntimeError>> for Interpreter {
     fn visit(&mut self, t: &mut Variable) -> Result<Value, RuntimeError> {
-        self.environment.get(&t.name)
+        self.environment.borrow().get(&t.name)
     }
 }
 
-impl Visitor<PrintStmt, Result<(), RuntimeError>> for Interpreter {
-    fn visit(&mut self, t: &mut PrintStmt) -> Result<(), RuntimeError> {
-        let value = self.visit(&mut t.expr)?;
-        let _ = write!(self.output, "{}", value);
-        Ok(())
+impl Visitor<Block, Result<(), RuntimeError>> for Interpreter {
+    fn visit(&mut self, t: &mut Block) -> Result<(), RuntimeError> {
+        self.execute_block(&mut t.statements, Environment::from_enclosing(&self.environment))
     }
 }
 
@@ -139,13 +172,32 @@ impl Visitor<Expression, Result<(), RuntimeError>> for Interpreter {
     }
 }
 
+impl Visitor<If, Result<(), RuntimeError>> for Interpreter {
+    fn visit(&mut self, t: &mut If) -> Result<(), RuntimeError> {
+        if self.visit(&mut t.condition)?.is_truthy() {
+            self.visit(&mut *t.then_branch)?;
+        } else if let Some(else_branch) = &mut t.else_branch {
+            self.visit(&mut **else_branch)?;
+        }
+        Ok(())
+    }
+}
+
+impl Visitor<PrintStmt, Result<(), RuntimeError>> for Interpreter {
+    fn visit(&mut self, t: &mut PrintStmt) -> Result<(), RuntimeError> {
+        let value = self.visit(&mut t.expr)?;
+        let _ = writeln!(self.output, "{}", value);
+        Ok(())
+    }
+}
+
 impl Visitor<Var, Result<(), RuntimeError>> for Interpreter {
     fn visit(&mut self, t: &mut Var) -> Result<(), RuntimeError> {
         let value = match &mut t.init {
             Some(expr) => self.visit(expr)?,
             None => Value::Nil,
         };
-        self.environment.define(t.name.lexeme.clone(), value);
+        self.environment.borrow_mut().define(t.name.lexeme.clone(), value);
         Ok(())
     }
 }

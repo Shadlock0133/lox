@@ -35,6 +35,7 @@ macro_rules! ast_gen {
 // It also implements Visit trait on sub-structs and main enum
 ast_gen! {
     pub enum Expr {
+        Assign(name: Token, value: Box<Expr>),
         Binary(op: Token, left: Box<Expr>, right: Box<Expr>),
         Unary(op: Token, right: Box<Expr>),
         Grouping(expr: Box<Expr>),
@@ -44,6 +45,13 @@ ast_gen! {
 }
 
 impl Expr {
+    pub fn assign(name: Token, value: Expr) -> Self {
+        Expr::Assign(Assign {
+            name,
+            value: Box::new(value),
+        })
+    }
+
     pub fn binary(op: Token, left: Expr, right: Expr) -> Self {
         Expr::Binary(Binary {
             op,
@@ -76,15 +84,24 @@ impl Expr {
 
 ast_gen! {
     pub enum Stmt {
+        Block(statements: Vec<Stmt>),
         Expression(expr: Expr),
+        If(condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>>),
         PrintStmt(expr: Expr),
         Var(name: Token, init: Option<Expr>),
     }
 }
 
 impl Stmt {
+    pub fn block(statements: Vec<Stmt>) -> Self {
+        Stmt::Block(Block { statements })
+    }
+
     pub fn expression(expr: Expr) -> Self {
         Stmt::Expression(Expression { expr })
+    }
+    pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {
+        Stmt::If(If{ condition, then_branch: Box::new(then_branch), else_branch: else_branch.map(Box::new) })
     }
 
     pub fn print(expr: Expr) -> Self {
