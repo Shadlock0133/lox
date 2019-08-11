@@ -89,6 +89,7 @@ ast_gen! {
         If(condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>>),
         PrintStmt(expr: Expr),
         Var(name: Token, init: Option<Expr>),
+        While(condition: Expr, body: Box<Stmt>),
     }
 }
 
@@ -100,8 +101,13 @@ impl Stmt {
     pub fn expression(expr: Expr) -> Self {
         Stmt::Expression(Expression { expr })
     }
+
     pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {
-        Stmt::If(If{ condition, then_branch: Box::new(then_branch), else_branch: else_branch.map(Box::new) })
+        Stmt::If(If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch.map(Box::new),
+        })
     }
 
     pub fn print(expr: Expr) -> Self {
@@ -110,5 +116,12 @@ impl Stmt {
 
     pub fn var(name: Token, init: Option<Expr>) -> Self {
         Stmt::Var(Var { name, init })
+    }
+
+    pub fn while_(condition: Expr, body: Stmt) -> Self {
+        Stmt::While(While {
+            condition,
+            body: Box::new(body),
+        })
     }
 }

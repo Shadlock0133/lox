@@ -4,33 +4,33 @@ use crate::{
     tokens::{Token, TokenType, Value},
     visitor::*,
 };
-use std::{
-    cell::RefCell,
-    fmt::{self, Write},
-    rc::Rc,
-};
+use std::{cell::RefCell, fmt, io::Write, rc::Rc};
 
-pub struct Interpreter {
-    output: String,
+pub struct Interpreter<W> {
+    output: W,
     environment: Rc<RefCell<Environment>>,
 }
 
-impl Interpreter {
-    pub fn new() -> Self {
+impl<W: Write> Interpreter<W> {
+    pub fn new(output: W) -> Self {
         Self {
-            output: String::new(),
+            output,
             environment: Environment::new(),
         }
     }
 
-    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<String, RuntimeError> {
+    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<(), RuntimeError> {
         for mut statement in statements {
             self.visit(&mut statement)?;
         }
-        Ok(std::mem::replace(&mut self.output, String::new()))
+        Ok(())
     }
 
-    fn execute_block(&mut self, statements: &mut [Stmt], environment: Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
+    fn execute_block(
+        &mut self,
+        statements: &mut [Stmt],
+        environment: Rc<RefCell<Environment>>,
+    ) -> Result<(), RuntimeError> {
         let previous = Rc::clone(&self.environment);
         let result = (|| {
             self.environment = environment;
@@ -61,15 +61,17 @@ impl fmt::Display for RuntimeError {
 
 impl std::error::Error for RuntimeError {}
 
-impl Visitor<Assign, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Assign, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Assign) -> Result<Value, RuntimeError> {
         let value = self.visit(&mut *t.value)?;
-        self.environment.borrow_mut().assign(&t.name, value.clone())?;
+        self.environment
+            .borrow_mut()
+            .assign(&t.name, value.clone())?;
         Ok(value)
     }
 }
 
-impl Visitor<Binary, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Binary, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Binary) -> Result<Value, RuntimeError> {
         fn num_op<F: Fn(f64, f64) -> Value>(
             op: &Token,
@@ -118,24 +120,24 @@ impl Visitor<Binary, Result<Value, RuntimeError>> for Interpreter {
 
             TokenType::EqualEqual => Ok(Value::Bool(left == right)),
             TokenType::BangEqual => Ok(Value::Bool(left != right)),
-            _ => unimplemented!(),
+            _ => Err(RuntimeError::new(&t.op, "Invalid binary operator")),
         }
     }
 }
 
-impl Visitor<Literal, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Literal, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Literal) -> Result<Value, RuntimeError> {
         Ok(t.value.clone())
     }
 }
 
-impl Visitor<Grouping, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Grouping, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Grouping) -> Result<Value, RuntimeError> {
         self.visit(&mut *t.expr)
     }
 }
 
-impl Visitor<Unary, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Unary, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Unary) -> Result<Value, RuntimeError> {
         let value = self.visit(&mut *t.right)?;
         match t.op.type_ {
@@ -153,26 +155,29 @@ impl Visitor<Unary, Result<Value, RuntimeError>> for Interpreter {
     }
 }
 
-impl Visitor<Variable, Result<Value, RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Variable, Result<Value, RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Variable) -> Result<Value, RuntimeError> {
         self.environment.borrow().get(&t.name)
     }
 }
 
-impl Visitor<Block, Result<(), RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Block, Result<(), RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Block) -> Result<(), RuntimeError> {
-        self.execute_block(&mut t.statements, Environment::from_enclosing(&self.environment))
+        self.execute_block(
+            &mut t.statements,
+            Environment::from_enclosing(&self.environment),
+        )
     }
 }
 
-impl Visitor<Expression, Result<(), RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Expression, Result<(), RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Expression) -> Result<(), RuntimeError> {
         self.visit(&mut t.expr)?;
         Ok(())
     }
 }
 
-impl Visitor<If, Result<(), RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<If, Result<(), RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut If) -> Result<(), RuntimeError> {
         if self.visit(&mut t.condition)?.is_truthy() {
             self.visit(&mut *t.then_branch)?;
@@ -183,7 +188,7 @@ impl Visitor<If, Result<(), RuntimeError>> for Interpreter {
     }
 }
 
-impl Visitor<PrintStmt, Result<(), RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<PrintStmt, Result<(), RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut PrintStmt) -> Result<(), RuntimeError> {
         let value = self.visit(&mut t.expr)?;
         let _ = writeln!(self.output, "{}", value);
@@ -191,13 +196,24 @@ impl Visitor<PrintStmt, Result<(), RuntimeError>> for Interpreter {
     }
 }
 
-impl Visitor<Var, Result<(), RuntimeError>> for Interpreter {
+impl<W: Write> Visitor<Var, Result<(), RuntimeError>> for Interpreter<W> {
     fn visit(&mut self, t: &mut Var) -> Result<(), RuntimeError> {
         let value = match &mut t.init {
             Some(expr) => self.visit(expr)?,
             None => Value::Nil,
         };
-        self.environment.borrow_mut().define(t.name.lexeme.clone(), value);
+        self.environment
+            .borrow_mut()
+            .define(t.name.lexeme.clone(), value);
+        Ok(())
+    }
+}
+
+impl<W: Write> Visitor<While, Result<(), RuntimeError>> for Interpreter<W> {
+    fn visit(&mut self, t: &mut While) -> Result<(), RuntimeError> {
+        while self.visit(&mut t.condition)?.is_truthy() {
+            self.visit(&mut *t.body)?;
+        }
         Ok(())
     }
 }

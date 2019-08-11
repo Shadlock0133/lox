@@ -132,16 +132,62 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_(&[If]) {
+        if self.match_(&[For]) {
+            self.for_statement()
+        } else if self.match_(&[If]) {
             self.if_statement()
         } else if self.match_(&[Print]) {
             self.print_statement()
+        } else if self.match_(&[While]) {
+            self.while_statement()
         } else if self.match_(&[LeftBrace]) {
             Ok(Stmt::block(self.block()?))
-        }
-        else {
+        } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(LeftParen, "Expect '(' after for.")?;
+
+        let initializer = if self.match_(&[Semicolon]) {
+            None
+        } else if self.match_(&[Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if !self.check(Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if !self.check(RightParen) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(inc) = increment {
+            body = Stmt::block(vec![body, Stmt::expression(inc)]);
+        }
+
+        body = Stmt::while_(
+            condition.unwrap_or_else(|| Expr::literal(Value::Bool(true))),
+            body,
+        );
+
+        if let Some(init) = initializer {
+            body = Stmt::block(vec![init, body]);
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -157,6 +203,16 @@ impl Parser {
         };
 
         Ok(Stmt::if_(condition, then_branch, else_branch))
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(LeftParen, "Expect '(' after while.")?;
+        let condition = self.expression()?;
+        self.consume(RightParen, "Expect ')' after while condition.")?;
+
+        let body = self.statement()?;
+
+        Ok(Stmt::while_(condition, body))
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {

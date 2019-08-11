@@ -32,7 +32,10 @@ impl Environment {
         } else if let Some(en) = &mut self.enclosing {
             en.borrow_mut().assign(name, value)
         } else {
-            Err(RuntimeError::new(&name, format!("Undefined variable '{}'.", name.lexeme)))
+            Err(RuntimeError::new(
+                &name,
+                format!("Undefined variable '{}'.", name.lexeme),
+            ))
         }
     }
 
@@ -42,7 +45,10 @@ impl Environment {
         } else if let Some(en) = &self.enclosing {
             en.borrow().get(name)
         } else {
-            Err(RuntimeError::new(&name, format!("Undefined variable '{}'.", name.lexeme)))
+            Err(RuntimeError::new(
+                &name,
+                format!("Undefined variable '{}'.", name.lexeme),
+            ))
         }
     }
 }

@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 struct Lox {
-    interpreter: Interpreter,
+    interpreter: Interpreter<io::Stdout>,
     reporter: Rc<RefCell<Reporter>>,
     had_runtime_error: bool,
 }
@@ -47,7 +47,7 @@ impl Lox {
     fn new() -> Self {
         let reporter = Reporter { had_error: false };
         Self {
-            interpreter: Interpreter::new(),
+            interpreter: Interpreter::new(io::stdout()),
             reporter: Rc::new(RefCell::new(reporter)),
             had_runtime_error: false,
         }
@@ -99,10 +99,7 @@ impl Lox {
         if result.is_err() {
             self.had_runtime_error = true;
         }
-        let result = result?;
-        if !result.is_empty() {
-            println!("{}", result);
-        }
+        result?;
 
         Ok(())
     }
