@@ -4,4 +4,4 @@
   Ugly error reporting is ugly but works.
 - No new syntax node for logical expr. It got stuffed into binary expr.
 - TODO: Handle quote escaping ("\"") inside strings
-- TODO: New keyword `in` and operand `..`. Used in range loops, ie. `for(i in 0..5)`
+- TODO: Add break keyword

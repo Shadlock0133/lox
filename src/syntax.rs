@@ -37,9 +37,10 @@ ast_gen! {
     pub enum Expr {
         Assign(name: Token, value: Box<Expr>),
         Binary(op: Token, left: Box<Expr>, right: Box<Expr>),
-        Unary(op: Token, right: Box<Expr>),
+        Call(callee: Box<Expr>, right_paren: Token, arguments: Vec<Expr>),
         Grouping(expr: Box<Expr>),
         Literal(value: Value),
+        Unary(op: Token, right: Box<Expr>),
         Variable(name: Token),
     }
 }
@@ -60,10 +61,11 @@ impl Expr {
         })
     }
 
-    pub fn unary(op: Token, right: Expr) -> Expr {
-        Expr::Unary(Unary {
-            op,
-            right: Box::new(right),
+    pub fn call(callee: Expr, right_paren: Token, arguments: Vec<Expr>) -> Expr {
+        Expr::Call(Call {
+            callee: Box::new(callee),
+            right_paren,
+            arguments,
         })
     }
 
@@ -75,6 +77,13 @@ impl Expr {
 
     pub fn literal(value: Value) -> Self {
         Expr::Literal(Literal { value })
+    }
+
+    pub fn unary(op: Token, right: Expr) -> Expr {
+        Expr::Unary(Unary {
+            op,
+            right: Box::new(right),
+        })
     }
 
     pub fn variable(name: Token) -> Self {

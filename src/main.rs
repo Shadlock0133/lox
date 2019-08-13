@@ -13,11 +13,14 @@ use std::{
 mod environment;
 mod interpreter;
 mod parser;
+mod scanner;
 mod syntax;
 mod tokens;
 mod visitor;
+
 use interpreter::*;
 use parser::*;
+use scanner::*;
 use tokens::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -38,7 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 struct Lox {
-    interpreter: Interpreter<io::Stdout>,
+    interpreter: Interpreter,
     reporter: Rc<RefCell<Reporter>>,
     had_runtime_error: bool,
 }
@@ -93,9 +96,9 @@ impl Lox {
         if self.reporter.borrow().had_error {
             return Ok(());
         }
-        let program = program.unwrap();
+        let mut program = program.unwrap();
         // eprintln!("{:?}", program);
-        let result = self.interpreter.interpret(program);
+        let result = self.interpreter.interpret(&mut program);
         if result.is_err() {
             self.had_runtime_error = true;
         }
