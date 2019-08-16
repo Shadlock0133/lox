@@ -8,11 +8,11 @@ macro_rules! ast_gen {
         { $( $variant:ident ( $( $typename:ident : $types:ty ),* $(,)? ) ,)* }
     ) => {
         $(
-            #[derive(Debug)]
+            #[derive(Debug, Clone)]
             pub struct $variant{ $(pub $typename: $types),* }
         )*
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         $vis enum $name { $($variant($variant)),* }
 
         impl<R, V> Visitor<$name, R> for V
@@ -94,6 +94,7 @@ ast_gen! {
     pub enum Stmt {
         Block(statements: Vec<Stmt>),
         Expression(expr: Expr),
+        Function(name: Token, params: Vec<Token>, body: Vec<Stmt>),
         If(condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>>),
         PrintStmt(expr: Expr),
         Var(name: Token, init: Option<Expr>),
@@ -108,6 +109,10 @@ impl Stmt {
 
     pub fn expression(expr: Expr) -> Self {
         Stmt::Expression(Expression { expr })
+    }
+
+    pub fn function(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
+        Stmt::Function(Function{ name, params, body })
     }
 
     pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {

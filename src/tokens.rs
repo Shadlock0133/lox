@@ -1,5 +1,5 @@
-use crate::interpreter::Interpreter;
-use std::{fmt, rc::Rc};
+use crate::{environment::Environment, interpreter::{Interpreter, RuntimeError}, syntax};
+use std::{cell::RefCell, fmt, rc::Rc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -51,21 +51,41 @@ pub enum TokenType {
 }
 
 #[derive(Clone)]
-pub struct Fun(Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>, usize);
+pub enum Fun {
+    Foreign(Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>, usize),
+    Native(Rc<RefCell<syntax::Function>>),
+}
 
 impl Fun {
-    pub fn call(&mut self, interpreter: &mut Interpreter, arguments: &mut [Value]) -> Value {
-        (self.0)(interpreter, arguments)
+    pub fn call(&mut self, interpreter: &mut Interpreter, arguments: &mut [Value]) -> Result<Value, RuntimeError> {
+        match self {
+            Self::Foreign(closure, _) => Ok((closure)(interpreter, arguments)),
+            Self::Native(function) => {
+                let mut function = function.borrow_mut();
+                let environment = Environment::from_enclosing(&interpreter.global);
+                for (param, arg) in function.params.iter().zip(arguments.iter()) {
+                    environment.borrow_mut().define(param.lexeme.clone(), arg.clone());
+                }
+                interpreter.execute_block(&mut function.body, environment)?;
+                Ok(Value::Nil)
+            }
+        }
     }
 
     pub fn arity(&self) -> usize {
-        self.1
+        match self {
+            Self::Foreign(_, arity) => *arity,
+            Self::Native(function) => function.borrow().params.len(),
+        }
     }
 }
 
 impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<native fn>")
+        match self {
+            Self::Foreign(_, _) => write!(f, "<foreign fn>"),
+            Self::Native(function) => write!(f, "<fn {}>", function.borrow().name.lexeme),
+        }
     }
 }
 
@@ -83,7 +103,7 @@ impl Value {
         arity: usize,
         f: F,
     ) -> Self {
-        Value::Fun(Fun(Rc::new(f), arity))
+        Value::Fun(Fun::Foreign(Rc::new(f), arity))
     }
 }
 
