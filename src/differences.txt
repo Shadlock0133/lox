@@ -1,7 +1,10 @@
 - General Java-to-Rust differences.
-  `Option`, `Box`, `Rc<RefCell>`, `Result` instead of throwing,
-  and who knows what just to emulate OOP in Rust.
-  Ugly error reporting is ugly but works.
+    `Option`, `Box`, `Rc<RefCell>`, `Result` instead of throwing,
+    and who knows what just to emulate OOP in Rust.
+    Ugly error reporting is ugly but works.
 - No new syntax node for logical expr. It got stuffed into binary expr.
+- TODO: Change Environment in interpreter into vec of envs;
+    No `enclosing` field, the enclosing env is simple up in stack.
+    In block stmt visitor instead of taking Rc, take index of prev env.
 - TODO: Handle quote escaping ("\"") inside strings
 - TODO: Add break keyword

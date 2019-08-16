@@ -65,7 +65,7 @@ impl Fun {
 
 impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "*fun*")
+        write!(f, "<native fn>")
     }
 }
 
@@ -76,6 +76,15 @@ pub enum Value {
     Number(f64),
     Bool(bool),
     Nil,
+}
+
+impl Value {
+    pub fn fun<F: Fn(&mut Interpreter, &mut [Value]) -> Value + 'static>(
+        arity: usize,
+        f: F,
+    ) -> Self {
+        Value::Fun(Fun(Rc::new(f), arity))
+    }
 }
 
 impl PartialEq for Value {
@@ -94,7 +103,7 @@ impl PartialEq for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Fun(_) => write!(f, "*fun*"),
+            Value::Fun(fun) => write!(f, "{:?}", fun),
             Value::String(s) => write!(f, "{}", s),
             Value::Number(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),

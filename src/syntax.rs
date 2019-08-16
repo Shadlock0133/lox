@@ -28,11 +28,10 @@ macro_rules! ast_gen {
     };
 }
 
-// This turns tuple-variants of an enum into tuple-structs with the same name as variant
-// eg. Name(Field1, Field2), turns into
+// This turns struct-variants of an enum into structs with the same name as variant
+// eg. Name(name1: Field1, name2: Field2), turns into
 // (in enum) Name(Name),
-// (outside enum, in new module) struct Name(Field1, Field2);
-// It also implements Visit trait on sub-structs and main enum
+// (outside enum, in new module) struct Name { name1: Field1, name2: Field2 }
 ast_gen! {
     pub enum Expr {
         Assign(name: Token, value: Box<Expr>),

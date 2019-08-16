@@ -5,18 +5,34 @@ use crate::{
     tokens::{Token, TokenType, Value},
     visitor::*,
 };
-use std::{cell::RefCell, fmt, io::Write, rc::Rc};
+use std::{cell::RefCell, fmt, io::Write, rc::Rc, time::Instant};
 
 pub struct Interpreter {
+    start_time: Instant,
     output: Box<dyn Write>,
-    environment: Rc<RefCell<Environment>>,
+    #[allow(dead_code)]
+    global: Rc<RefCell<Environment>>,
+    current: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new<W: Write + 'static>(output: W) -> Self {
+        let global = Environment::new();
+
+        global.borrow_mut().define(
+            "clock".into(),
+            Value::fun(0, |inter, _| {
+                let dur = inter.start_time.elapsed();
+                Value::Number(dur.as_nanos() as f64 * 1e-9)
+            }),
+        );
+
+        let current = Rc::clone(&global);
         Self {
+            start_time: Instant::now(),
             output: Box::new(output),
-            environment: Environment::new(),
+            global,
+            current,
         }
     }
 
@@ -32,15 +48,15 @@ impl Interpreter {
         statements: &mut [Stmt],
         environment: Rc<RefCell<Environment>>,
     ) -> Result<(), RuntimeError> {
-        let previous = Rc::clone(&self.environment);
+        let previous = Rc::clone(&self.current);
         let result = (|| {
-            self.environment = environment;
+            self.current = environment;
             for statement in statements {
                 self.visit(statement)?;
             }
             Ok(())
         })();
-        self.environment = previous;
+        self.current = previous;
         result
     }
 }
@@ -64,7 +80,7 @@ impl std::error::Error for RuntimeError {}
 
 impl_visitor! { for Interpreter, (self, t: Assign) -> Result<Value, RuntimeError> {
     let value = self.visit(&mut *t.value)?;
-    self.environment
+    self.current
         .borrow_mut()
         .assign(&t.name, value.clone())?;
     Ok(value)
@@ -99,9 +115,11 @@ impl_visitor! { for Interpreter, (self, t: Binary) -> Result<Value, RuntimeError
         TokenType::Plus => match (left, right) {
             (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l + r)),
             (Value::String(l), Value::String(r)) => Ok(Value::String(l + &r)),
+            (Value::String(l), r) => Ok(Value::String(l + &r.to_string())),
+            (l, Value::String(r)) => Ok(Value::String(l.to_string() + &r)),
             _ => Err(RuntimeError::new(
                 &t.op,
-                "Operands must be two numbers or two strings",
+                "Operands must begin with a string or be two numbers",
             )),
         },
         TokenType::Minus => num_op(&t.op, left, right, |l, r| Value::Number(l - r)),
@@ -169,13 +187,13 @@ impl_visitor! { for Interpreter, (self, t: Unary) -> Result<Value, RuntimeError>
 }}
 
 impl_visitor! { for Interpreter, (self, t: Variable) -> Result<Value, RuntimeError> {
-    self.environment.borrow().get(&t.name)
+    self.current.borrow().get(&t.name)
 }}
 
 impl_visitor! { for Interpreter, (self, t: Block) -> Result<(), RuntimeError> {
     self.execute_block(
         &mut t.statements,
-        Environment::from_enclosing(&self.environment),
+        Environment::from_enclosing(&self.current),
     )
 }}
 
@@ -204,7 +222,7 @@ impl_visitor! { for Interpreter, (self, t: Var) -> Result<(), RuntimeError> {
         Some(expr) => self.visit(expr)?,
         None => Value::Nil,
     };
-    self.environment
+    self.current
         .borrow_mut()
         .define(t.name.lexeme.clone(), value);
     Ok(())
