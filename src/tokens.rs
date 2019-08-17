@@ -1,5 +1,8 @@
-use crate::{environment::Environment, interpreter::{Interpreter, RuntimeError}, syntax};
-use std::{cell::RefCell, fmt, rc::Rc};
+use crate::{
+    environment::Environment,
+    interpreter::{Interpreter, RuntimeError},
+};
+use std::{fmt, rc::Rc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -52,30 +55,47 @@ pub enum TokenType {
 
 #[derive(Clone)]
 pub enum Fun {
-    Foreign(Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>, usize),
-    Native(Rc<RefCell<syntax::Function>>),
+    Foreign {
+        closure: Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>,
+        arity: usize,
+    },
+    Native {
+        name: Box<Token>,
+        params: Vec<Token>,
+        body: Vec<crate::syntax::Stmt>,
+    },
 }
 
 impl Fun {
-    pub fn call(&mut self, interpreter: &mut Interpreter, arguments: &mut [Value]) -> Result<Value, RuntimeError> {
+    pub fn call(
+        &mut self,
+        interpreter: &mut Interpreter,
+        arguments: &mut [Value],
+    ) -> Result<Value, RuntimeError> {
         match self {
-            Self::Foreign(closure, _) => Ok((closure)(interpreter, arguments)),
-            Self::Native(function) => {
-                let mut function = function.borrow_mut();
+            Self::Foreign { closure, .. } => Ok((closure)(interpreter, arguments)),
+            Self::Native { params, body, .. } => {
                 let environment = Environment::from_enclosing(&interpreter.global);
-                for (param, arg) in function.params.iter().zip(arguments.iter()) {
-                    environment.borrow_mut().define(param.lexeme.clone(), arg.clone());
+                for (param, arg) in params.iter().zip(arguments.iter()) {
+                    environment
+                        .borrow_mut()
+                        .define(param.lexeme.clone(), arg.clone());
                 }
-                interpreter.execute_block(&mut function.body, environment)?;
-                Ok(Value::Nil)
+                #[allow(clippy::redundant_closure_call)]
+                let result = (|| interpreter.execute_block(body, environment))();
+                match result {
+                    Ok(()) => Ok(Value::Nil),
+                    Err(RuntimeError::Return(value)) => Ok(value),
+                    Err(err) => Err(err),
+                }
             }
         }
     }
 
     pub fn arity(&self) -> usize {
         match self {
-            Self::Foreign(_, arity) => *arity,
-            Self::Native(function) => function.borrow().params.len(),
+            Self::Foreign { arity, .. } => *arity,
+            Self::Native { params, .. } => params.len(),
         }
     }
 }
@@ -83,8 +103,8 @@ impl Fun {
 impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Foreign(_, _) => write!(f, "<foreign fn>"),
-            Self::Native(function) => write!(f, "<fn {}>", function.borrow().name.lexeme),
+            Self::Foreign { .. } => write!(f, "<foreign fn>"),
+            Self::Native { name, .. } => write!(f, "<fn {}>", name.lexeme),
         }
     }
 }
@@ -103,18 +123,21 @@ impl Value {
         arity: usize,
         f: F,
     ) -> Self {
-        Value::Fun(Fun::Foreign(Rc::new(f), arity))
+        Value::Fun(Fun::Foreign {
+            closure: Rc::new(f),
+            arity,
+        })
     }
 }
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Number(l), Value::Number(r)) if l.is_nan() && r.is_nan() => true,
-            (Value::Nil, Value::Nil) => true,
-            (Value::Number(l), Value::Number(r)) => l == r,
-            (Value::String(l), Value::String(r)) => l == r,
-            (Value::Bool(l), Value::Bool(r)) => l == r,
+            (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => true,
+            (Self::Nil, Self::Nil) => true,
+            (Self::Number(l), Self::Number(r)) => l == r,
+            (Self::String(l), Self::String(r)) => l == r,
+            (Self::Bool(l), Self::Bool(r)) => l == r,
             _ => false,
         }
     }
@@ -123,11 +146,11 @@ impl PartialEq for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Fun(fun) => write!(f, "{:?}", fun),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Number(n) => write!(f, "{}", n),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Nil => write!(f, "nil"),
+            Self::Fun(fun) => write!(f, "{:?}", fun),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Nil => write!(f, "nil"),
         }
     }
 }
@@ -135,15 +158,15 @@ impl fmt::Display for Value {
 impl Value {
     pub fn as_number(&self) -> Option<f64> {
         match self {
-            Value::Number(n) => Some(*n),
+            Self::Number(n) => Some(*n),
             _ => None,
         }
     }
 
     pub fn is_truthy(&self) -> bool {
         match self {
-            Value::Bool(b) => *b,
-            Value::Nil => false,
+            Self::Bool(b) => *b,
+            Self::Nil => false,
             _ => true,
         }
     }

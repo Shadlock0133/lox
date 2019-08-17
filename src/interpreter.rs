@@ -2,7 +2,7 @@ use crate::{
     environment::Environment,
     impl_visitor,
     syntax::*,
-    tokens::{Token, TokenType, Value, Fun},
+    tokens::{Fun, Token, TokenType, Value},
     visitor::*,
 };
 use std::{cell::RefCell, fmt, io::Write, rc::Rc, time::Instant};
@@ -37,10 +37,17 @@ impl Interpreter {
     }
 
     pub fn interpret(&mut self, statements: &mut [Stmt]) -> RuntimeResult<()> {
-        for statement in statements {
-            self.visit(statement)?;
+        let result = (|| {
+            for statement in statements {
+                self.visit(statement)?;
+            }
+            Ok(())
+        })();
+
+        match result {
+            Err(RuntimeError::Error(_, _)) => result,
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     pub fn execute_block(
@@ -62,19 +69,26 @@ impl Interpreter {
 }
 
 #[derive(Debug)]
-pub struct RuntimeError(Token, String);
+pub enum RuntimeError {
+    Return(Value),
+    Break,
+    Error(Token, String),
+}
 
 type RuntimeResult<T> = Result<T, RuntimeError>;
 
 impl RuntimeError {
     pub fn new<S: Into<String>>(token: &Token, message: S) -> Self {
-        Self(token.clone(), message.into())
+        Self::Error(token.clone(), message.into())
     }
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\n[line {}]", self.1, self.0.line)
+        match self {
+            Self::Error(token, message) => write!(f, "{}\n[line {}]", message, token.line),
+            _ => unimplemented!(),
+        }
     }
 }
 
@@ -205,9 +219,12 @@ impl_visitor! { for Interpreter, (self, t: Expression) -> RuntimeResult<()> {
 }}
 
 impl_visitor! { for Interpreter, (self, t: Function) -> RuntimeResult<()> {
-    let name = t.name.lexeme.clone();
-    let function = Value::Fun(Fun::Native(Rc::new(RefCell::new(t.clone()))));
-    self.current.borrow_mut().define(name, function);
+    let env_name = t.name.lexeme.clone();
+    let name = Box::new(t.name.clone());
+    let params = t.params.clone();
+    let body = t.body.clone();
+    let function = Value::Fun(Fun::Native { name, params, body });
+    self.current.borrow_mut().define(env_name, function);
     Ok(())
 }}
 
@@ -224,6 +241,15 @@ impl_visitor! { for Interpreter, (self, t: PrintStmt) -> RuntimeResult<()> {
     let value = self.visit(&mut t.expr)?;
     let _ = writeln!(self.output, "{}", value);
     Ok(())
+}}
+
+impl_visitor! { for Interpreter, (self, t: Return) -> RuntimeResult<()> {
+    let value = t.value
+        .as_mut()
+        .map(|x| self.visit(x))
+        .transpose()?
+        .unwrap_or(Value::Nil);
+    Err(RuntimeError::Return(value))
 }}
 
 impl_visitor! { for Interpreter, (self, t: Var) -> RuntimeResult<()> {

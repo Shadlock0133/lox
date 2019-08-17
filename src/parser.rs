@@ -111,7 +111,7 @@ impl Parser {
 
     fn declaration(&mut self) -> ParseResult<Stmt> {
         #[allow(clippy::redundant_closure_call)]
-        (||
+        (|| {
             if self.match_(&[Fun]) {
                 self.function("function")
             } else if self.match_(&[Var]) {
@@ -119,7 +119,7 @@ impl Parser {
             } else {
                 self.statement()
             }
-        )()
+        })()
         .map_err(|x| {
             self.synchronize();
             x
@@ -133,9 +133,13 @@ impl Parser {
         let mut params = Vec::new();
         if !self.check(RightParen) {
             loop {
-                if params.len() >= 255 { self.error(self.peek(), "Cannot have more than 255 parameters."); }
+                if params.len() >= 255 {
+                    self.error(self.peek(), "Cannot have more than 255 parameters.");
+                }
                 params.push(self.consume(Identifier, "Expect parameter name.")?);
-                if !self.match_(&[Comma]) { break; }
+                if !self.match_(&[Comma]) {
+                    break;
+                }
             }
         }
         self.consume(RightParen, "Expect ')' after parameters.")?;
@@ -163,6 +167,8 @@ impl Parser {
             self.if_statement()
         } else if self.match_(&[Print]) {
             self.print_statement()
+        } else if self.match_(&[Return]) {
+            self.return_statement()
         } else if self.match_(&[While]) {
             self.while_statement()
         } else if self.match_(&[LeftBrace]) {
@@ -230,6 +236,23 @@ impl Parser {
         Ok(Stmt::if_(condition, then_branch, else_branch))
     }
 
+    fn print_statement(&mut self) -> ParseResult<Stmt> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Expect ';' after value")?;
+        Ok(Stmt::print(expr))
+    }
+
+    fn return_statement(&mut self) -> ParseResult<Stmt> {
+        let keyword = self.previous();
+        let value = if !self.check(Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(Semicolon, "Expect ';' after return value.")?;
+        Ok(Stmt::return_(keyword, value))
+    }
+
     fn while_statement(&mut self) -> ParseResult<Stmt> {
         self.consume(LeftParen, "Expect '(' after while.")?;
         let condition = self.expression()?;
@@ -249,12 +272,6 @@ impl Parser {
         self.consume(RightBrace, "Expect '}' after block.")?;
 
         Ok(statements)
-    }
-
-    fn print_statement(&mut self) -> ParseResult<Stmt> {
-        let expr = self.expression()?;
-        self.consume(Semicolon, "Expect ';' after value")?;
-        Ok(Stmt::print(expr))
     }
 
     fn expression_statement(&mut self) -> ParseResult<Stmt> {

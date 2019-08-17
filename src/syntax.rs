@@ -5,7 +5,7 @@ use crate::{
 
 macro_rules! ast_gen {
     ( $vis:vis enum $name:ident
-        { $( $variant:ident ( $( $typename:ident : $types:ty ),* $(,)? ) ,)* }
+        { $( $variant:ident { $( $typename:ident : $types:ty ),* $(,)? } ,)* }
     ) => {
         $(
             #[derive(Debug, Clone)]
@@ -13,6 +13,7 @@ macro_rules! ast_gen {
         )*
 
         #[derive(Debug, Clone)]
+        // #[allow(clippy::large_enum_variant)]
         $vis enum $name { $($variant($variant)),* }
 
         impl<R, V> Visitor<$name, R> for V
@@ -34,13 +35,13 @@ macro_rules! ast_gen {
 // (outside enum, in new module) struct Name { name1: Field1, name2: Field2 }
 ast_gen! {
     pub enum Expr {
-        Assign(name: Token, value: Box<Expr>),
-        Binary(op: Token, left: Box<Expr>, right: Box<Expr>),
-        Call(callee: Box<Expr>, right_paren: Token, arguments: Vec<Expr>),
-        Grouping(expr: Box<Expr>),
-        Literal(value: Value),
-        Unary(op: Token, right: Box<Expr>),
-        Variable(name: Token),
+        Assign { name: Token, value: Box<Expr> },
+        Binary { op: Token, left: Box<Expr>, right: Box<Expr> },
+        Call { callee: Box<Expr>, right_paren: Token, arguments: Vec<Expr> },
+        Grouping { expr: Box<Expr> },
+        Literal { value: Value },
+        Unary { op: Token, right: Box<Expr> },
+        Variable { name: Token },
     }
 }
 
@@ -92,13 +93,14 @@ impl Expr {
 
 ast_gen! {
     pub enum Stmt {
-        Block(statements: Vec<Stmt>),
-        Expression(expr: Expr),
-        Function(name: Token, params: Vec<Token>, body: Vec<Stmt>),
-        If(condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>>),
-        PrintStmt(expr: Expr),
-        Var(name: Token, init: Option<Expr>),
-        While(condition: Expr, body: Box<Stmt>),
+        Block { statements: Vec<Stmt> },
+        Expression { expr: Expr },
+        Function { name: Token, params: Vec<Token>, body: Vec<Stmt> },
+        If { condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>> },
+        PrintStmt { expr: Expr },
+        Return { keyword: Token, value: Option<Expr> },
+        Var { name: Token, init: Option<Expr> },
+        While { condition: Expr, body: Box<Stmt> },
     }
 }
 
@@ -112,7 +114,7 @@ impl Stmt {
     }
 
     pub fn function(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
-        Stmt::Function(Function{ name, params, body })
+        Stmt::Function(Function { name, params, body })
     }
 
     pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {
@@ -125,6 +127,10 @@ impl Stmt {
 
     pub fn print(expr: Expr) -> Self {
         Stmt::PrintStmt(PrintStmt { expr })
+    }
+
+    pub fn return_(keyword: Token, value: Option<Expr>) -> Self {
+        Stmt::Return(Return { keyword, value })
     }
 
     pub fn var(name: Token, init: Option<Expr>) -> Self {
