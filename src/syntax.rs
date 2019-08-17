@@ -26,6 +26,14 @@ macro_rules! ast_gen {
                 }
             }
         }
+
+        #[test]
+        #[ignore]
+        #[allow(non_snake_case)]
+        fn $name() {
+            eprintln!("Size of {}: {}", stringify!($name), std::mem::size_of::<crate::syntax::$name>());
+            $( eprintln!("Size of {}::{}: {}", stringify!($name), stringify!($variant), std::mem::size_of::<crate::syntax::$variant>()); )*
+        }
     };
 }
 
