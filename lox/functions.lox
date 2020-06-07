@@ -1,0 +1,39 @@
+var start = clock();
+
+fun fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 2) + fibonacci(n - 1);
+}
+
+for (var i = 0; i < 20; i = i + 1) {
+  print fibonacci(i);
+}
+
+var end = clock();
+
+print "Time: " + (end - start) + "s";
+
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".
+
+var a = "global";
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
+}

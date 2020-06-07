@@ -8,11 +8,11 @@ macro_rules! ast_gen {
         { $( $variant:ident { $( $typename:ident : $types:ty ),* $(,)? } ,)* }
     ) => {
         $(
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, Hash)]
             pub struct $variant{ $(pub $typename: $types),* }
         )*
 
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Hash)]
         // #[allow(clippy::large_enum_variant)]
         $vis enum $name { $($variant($variant)),* }
 
@@ -38,9 +38,9 @@ macro_rules! ast_gen {
 }
 
 // This turns struct-variants of an enum into structs with the same name as variant
-// eg. Name(name1: Field1, name2: Field2), turns into
+// eg. Name { name1: Field1, name2: Field2 }, turns into
 // (in enum) Name(Name),
-// (outside enum, in new module) struct Name { name1: Field1, name2: Field2 }
+// (outside enum) struct Name { name1: Field1, name2: Field2 }
 ast_gen! {
     pub enum Expr {
         Assign { name: Token, value: Box<Expr> },
@@ -51,6 +51,27 @@ ast_gen! {
         Unary { op: Token, right: Box<Expr> },
         Variable { name: Token },
     }
+}
+
+pub trait ExprVisitor<R> {
+    fn visit_expr(&mut self, expr: &mut Expr) -> R {
+        match expr {
+            Expr::Assign(e) => self.visit_assign(e),
+            Expr::Binary(e) => self.visit_binary(e),
+            Expr::Call(e) => self.visit_call(e),
+            Expr::Grouping(e) => self.visit_grouping(e),
+            Expr::Literal(e) => self.visit_literal(e),
+            Expr::Unary(e) => self.visit_unary(e),
+            Expr::Variable(e) => self.visit_variable(e),
+        }
+    }
+    fn visit_assign(&mut self, assign: &mut Assign) -> R { unimplemented!() }
+    fn visit_binary(&mut self, binary: &mut Binary) -> R { unimplemented!() }
+    fn visit_call(&mut self, call: &mut Call) -> R { unimplemented!() }
+    fn visit_grouping(&mut self, grouping: &mut Grouping) -> R { unimplemented!() }
+    fn visit_literal(&mut self, literal: &mut Literal) -> R { unimplemented!() }
+    fn visit_unary(&mut self, unary: &mut Unary) -> R { unimplemented!() }
+    fn visit_variable(&mut self, variable: &mut Variable) -> R { unimplemented!() }
 }
 
 impl Expr {
@@ -110,6 +131,29 @@ ast_gen! {
         Var { name: Token, init: Option<Expr> },
         While { condition: Expr, body: Box<Stmt> },
     }
+}
+
+pub trait StmtVisitor<R> {
+    fn visit_stmt(&mut self, stmt: &mut Stmt) -> R {
+        match stmt {
+            Stmt::Block(s) => self.visit_block(s),
+            Stmt::Expression(s) => self.visit_expression(s),
+            Stmt::Function(s) => self.visit_function(s),
+            Stmt::If(s) => self.visit_if(s),
+            Stmt::PrintStmt(s) => self.visit_print_stmt(s),
+            Stmt::Return(s) => self.visit_return(s),
+            Stmt::Var(s) => self.visit_var(s),
+            Stmt::While(s) => self.visit_while(s),
+        }
+    }
+    fn visit_block(&mut self, block: &mut Block) -> R { unimplemented!() }
+    fn visit_expression(&mut self, expression: &mut Expression) -> R { unimplemented!() }
+    fn visit_function(&mut self, function: &mut Function) -> R { unimplemented!() }
+    fn visit_if(&mut self, if_: &mut If) -> R { unimplemented!() }
+    fn visit_print_stmt(&mut self, print_stmt: &mut PrintStmt) -> R { unimplemented!() }
+    fn visit_return(&mut self, return_: &mut Return) -> R { unimplemented!() }
+    fn visit_var(&mut self, var: &mut Var) -> R { unimplemented!() }
+    fn visit_while(&mut self, while_: &mut While) -> R { unimplemented!() }
 }
 
 impl Stmt {

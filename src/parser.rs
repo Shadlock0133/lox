@@ -1,4 +1,5 @@
 use crate::{
+    errors::{ParseError, ParseResult},
     syntax::*,
     tokens::{
         Token,
@@ -14,11 +15,6 @@ pub struct Parser {
     current: usize,
     reporter: Rc<RefCell<Reporter>>,
 }
-
-#[derive(Debug)]
-pub struct ParseError;
-
-type ParseResult<T> = Result<T, ParseError>;
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, reporter: Rc<RefCell<Reporter>>) -> Self {

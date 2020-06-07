@@ -11,12 +11,14 @@ use std::{
 };
 
 mod environment;
+mod errors;
 mod interpreter;
 mod parser;
 mod scanner;
 mod syntax;
 mod tokens;
 mod visitor;
+mod resolver;
 
 use interpreter::*;
 use parser::*;

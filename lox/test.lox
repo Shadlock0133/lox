@@ -1,0 +1,43 @@
+// Comment
+
+class Wrapper {
+    init(fn) {
+        this.fn = fn;
+    }
+
+    run() {
+        print "start";
+        this.fn();
+        print "stop";
+    }
+}
+
+class Unwrapper < Wrapper {
+    get_fn() {
+        return super.fn;
+    }
+}
+
+fun test() { print "running"; }
+var wrapped = Wrapper(test);
+wrapped.run();
+
+for(var i = 0; i < 5; i += 1) {
+    print "loop ";
+    print i;
+    print "\n";
+}
+
+print "I'm ";
+var j = 0;
+while(j < 3) {
+    print "very ";
+    j += 1;
+}
+print "hungry.\n";
+
+fun test2() { print 1.23; }
+var unwrapper = Unwrapper(test);
+unwrapper.run();
+var unwrapped_fn = unwrapper.get_fn();
+unwrapped_fn();

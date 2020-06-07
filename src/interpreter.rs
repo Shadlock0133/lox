@@ -1,16 +1,16 @@
 use crate::{
     environment::Environment,
+    errors::{RuntimeError, RuntimeResult},
     impl_visitor,
     syntax::*,
     tokens::{Fun, Token, TokenType, Value},
     visitor::*,
 };
-use std::{cell::RefCell, fmt, io::Write, rc::Rc, time::Instant};
+use std::{cell::RefCell, io::Write, rc::Rc, time::Instant};
 
 pub struct Interpreter {
     start_time: Instant,
     output: Box<dyn Write>,
-    #[allow(dead_code)]
     pub global: Rc<RefCell<Environment>>,
     current: Rc<RefCell<Environment>>,
 }
@@ -68,33 +68,18 @@ impl Interpreter {
     }
 }
 
-#[derive(Debug)]
-pub enum RuntimeError {
-    Return(Value),
-    Break,
-    Error(Token, String),
-}
-
-type RuntimeResult<T> = Result<T, RuntimeError>;
-
-impl RuntimeError {
-    pub fn new<S: Into<String>>(token: &Token, message: S) -> Self {
-        Self::Error(token.clone(), message.into())
+impl ExprVisitor<RuntimeResult<Value>> for Interpreter {
+    fn visit_assign(&mut self, t: &mut Assign) -> RuntimeResult<Value> {
+        let value = self.visit(&mut *t.value)?;
+        self.current
+            .borrow_mut()
+            .assign(&t.name, value.clone())?;
+        Ok(value)
     }
 }
+impl StmtVisitor<RuntimeResult> for Interpreter {}
 
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Error(token, message) => write!(f, "{}\n[line {}]", message, token.line),
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl std::error::Error for RuntimeError {}
-
-impl_visitor! { for Interpreter, (self, t: Assign) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Assign) -> RuntimeResult<Value> {
     let value = self.visit(&mut *t.value)?;
     self.current
         .borrow_mut()
@@ -102,7 +87,7 @@ impl_visitor! { for Interpreter, (self, t: Assign) -> RuntimeResult<Value> {
     Ok(value)
 }}
 
-impl_visitor! { for Interpreter, (self, t: Binary) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Binary) -> RuntimeResult<Value> {
     fn num_op<F: Fn(f64, f64) -> Value>(
         op: &Token,
         l: Value,
@@ -135,13 +120,13 @@ impl_visitor! { for Interpreter, (self, t: Binary) -> RuntimeResult<Value> {
             (l, Value::String(r)) => Ok(Value::String(l.to_string() + &r)),
             _ => Err(RuntimeError::new(
                 &t.op,
-                "Operands must begin with a string or be two numbers",
+                "Operands must begin with a string or be two numbers.",
             )),
         },
         TokenType::Minus => num_op(&t.op, left, right, |l, r| Value::Number(l - r)),
         TokenType::Star => num_op(&t.op, left, right, |l, r| Value::Number(l * r)),
         TokenType::Slash if right == Value::Number(0.0) => {
-            Err(RuntimeError::new(&t.op, "Can't divide by zero"))
+            Err(RuntimeError::new(&t.op, "Can't divide by zero."))
         }
         TokenType::Slash => num_op(&t.op, left, right, |l, r| Value::Number(l / r)),
 
@@ -152,11 +137,11 @@ impl_visitor! { for Interpreter, (self, t: Binary) -> RuntimeResult<Value> {
 
         TokenType::EqualEqual => Ok(Value::Bool(left == right)),
         TokenType::BangEqual => Ok(Value::Bool(left != right)),
-        _ => Err(RuntimeError::new(&t.op, "Invalid binary operator")),
+        _ => Err(RuntimeError::new(&t.op, "Invalid binary operator.")),
     }
 }}
 
-impl_visitor! { for Interpreter, (self, t: Call) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Call) -> RuntimeResult<Value> {
     let callee = self.visit(&mut *t.callee)?;
 
     let mut arguments = t.arguments
@@ -178,15 +163,15 @@ impl_visitor! { for Interpreter, (self, t: Call) -> RuntimeResult<Value> {
     }
 }}
 
-impl_visitor! { for Interpreter, (self, t: Grouping) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Grouping) -> RuntimeResult<Value> {
     self.visit(&mut *t.expr)
 }}
 
-impl_visitor! { for Interpreter, (self, t: Literal) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Literal) -> RuntimeResult<Value> {
     Ok(t.value.clone())
 }}
 
-impl_visitor! { for Interpreter, (self, t: Unary) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Unary) -> RuntimeResult<Value> {
     let value = self.visit(&mut *t.right)?;
     match t.op.type_ {
         TokenType::Minus => {
@@ -197,38 +182,39 @@ impl_visitor! { for Interpreter, (self, t: Unary) -> RuntimeResult<Value> {
         TokenType::Bang => Ok(Value::Bool(!value.is_truthy())),
         _ => Err(RuntimeError::new(
             &t.op,
-            "Unary expression must contain - or !",
+            "Unary expression must contain '-' or '!'.",
         )),
     }
 }}
 
-impl_visitor! { for Interpreter, (self, t: Variable) -> RuntimeResult<Value> {
+impl_visitor! { for Interpreter, (&mut self, t: Variable) -> RuntimeResult<Value> {
     self.current.borrow().get(&t.name)
 }}
 
-impl_visitor! { for Interpreter, (self, t: Block) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: Block) -> RuntimeResult<()> {
     self.execute_block(
         &mut t.statements,
         Environment::from_enclosing(&self.current),
     )
 }}
 
-impl_visitor! { for Interpreter, (self, t: Expression) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: Expression) -> RuntimeResult<()> {
     self.visit(&mut t.expr)?;
     Ok(())
 }}
 
-impl_visitor! { for Interpreter, (self, t: Function) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: Function) -> RuntimeResult<()> {
     let env_name = t.name.lexeme.clone();
     let name = Box::new(t.name.clone());
     let params = t.params.clone();
     let body = t.body.clone();
-    let function = Value::Fun(Fun::Native { name, params, body });
+    let closure = Environment::from_enclosing(&self.current);
+    let function = Value::Fun(Fun::Native { name, params, body, closure });
     self.current.borrow_mut().define(env_name, function);
     Ok(())
 }}
 
-impl_visitor! { for Interpreter, (self, t: If) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: If) -> RuntimeResult<()> {
     if self.visit(&mut t.condition)?.is_truthy() {
         self.visit(&mut *t.then_branch)?;
     } else if let Some(else_branch) = &mut t.else_branch {
@@ -237,13 +223,13 @@ impl_visitor! { for Interpreter, (self, t: If) -> RuntimeResult<()> {
     Ok(())
 }}
 
-impl_visitor! { for Interpreter, (self, t: PrintStmt) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: PrintStmt) -> RuntimeResult<()> {
     let value = self.visit(&mut t.expr)?;
     let _ = writeln!(self.output, "{}", value);
     Ok(())
 }}
 
-impl_visitor! { for Interpreter, (self, t: Return) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: Return) -> RuntimeResult<()> {
     let value = t.value
         .as_mut()
         .map(|x| self.visit(x))
@@ -252,7 +238,7 @@ impl_visitor! { for Interpreter, (self, t: Return) -> RuntimeResult<()> {
     Err(RuntimeError::Return(value))
 }}
 
-impl_visitor! { for Interpreter, (self, t: Var) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: Var) -> RuntimeResult<()> {
     let value = match &mut t.init {
         Some(expr) => self.visit(expr)?,
         None => Value::Nil,
@@ -263,7 +249,7 @@ impl_visitor! { for Interpreter, (self, t: Var) -> RuntimeResult<()> {
     Ok(())
 }}
 
-impl_visitor! { for Interpreter, (self, t: While) -> RuntimeResult<()> {
+impl_visitor! { for Interpreter, (&mut self, t: While) -> RuntimeResult<()> {
     while self.visit(&mut t.condition)?.is_truthy() {
         self.visit(&mut *t.body)?;
     }

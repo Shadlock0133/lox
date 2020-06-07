@@ -1,8 +1,9 @@
 use crate::{
     environment::Environment,
-    interpreter::{Interpreter, RuntimeError},
+    errors::RuntimeError,
+    interpreter::Interpreter,
 };
-use std::{fmt, rc::Rc};
+use std::{cell::RefCell, fmt, rc::Rc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -53,16 +54,17 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum Fun {
     Foreign {
-        closure: Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>,
+        inner: Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>,
         arity: usize,
     },
     Native {
         name: Box<Token>,
         params: Vec<Token>,
         body: Vec<crate::syntax::Stmt>,
+        closure: Rc<RefCell<Environment>>,
     },
 }
 
@@ -73,16 +75,20 @@ impl Fun {
         arguments: &mut [Value],
     ) -> Result<Value, RuntimeError> {
         match self {
-            Self::Foreign { closure, .. } => Ok((closure)(interpreter, arguments)),
-            Self::Native { params, body, .. } => {
-                let environment = Environment::from_enclosing(&interpreter.global);
+            Self::Foreign { inner, .. } => Ok((inner)(interpreter, arguments)),
+            Self::Native {
+                params,
+                body,
+                closure,
+                ..
+            } => {
+                let environment = Environment::from_enclosing(&closure);
                 for (param, arg) in params.iter().zip(arguments.iter()) {
                     environment
                         .borrow_mut()
                         .define(param.lexeme.clone(), arg.clone());
                 }
-                #[allow(clippy::redundant_closure_call)]
-                let result = (|| interpreter.execute_block(body, environment))();
+                let result = interpreter.execute_block(body, environment);
                 match result {
                     Ok(()) => Ok(Value::Nil),
                     Err(RuntimeError::Return(value)) => Ok(value),
@@ -109,7 +115,7 @@ impl fmt::Debug for Fun {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum Value {
     Fun(Fun),
     String(String),
@@ -124,7 +130,7 @@ impl Value {
         f: F,
     ) -> Self {
         Value::Fun(Fun::Foreign {
-            closure: Rc::new(f),
+            inner: Rc::new(f),
             arity,
         })
     }
@@ -142,6 +148,8 @@ impl PartialEq for Value {
         }
     }
 }
+
+impl Eq for Value {}
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -172,7 +180,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,

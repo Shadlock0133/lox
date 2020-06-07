@@ -1,4 +1,4 @@
-use crate::{interpreter::RuntimeError, tokens::Token, tokens::Value};
+use crate::{errors::RuntimeError, tokens::Token, tokens::Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 pub struct Environment {
