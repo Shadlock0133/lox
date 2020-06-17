@@ -1,32 +1,43 @@
-use crate::{errors::RuntimeError, tokens::Token, tokens::Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::{errors::RuntimeError, tokens::Token, types::Value};
+
+#[derive(Clone)]
 pub struct Environment {
-    enclosing: Option<Rc<RefCell<Self>>>,
+    inner: Rc<RefCell<Inner>>,
+}
+
+#[derive(Default)]
+struct Inner {
+    enclosing: Option<Environment>,
     values: HashMap<String, Value>,
 }
 
+impl Inner {
+    fn new(enclosing: Environment) -> Self {
+        Self {
+            enclosing: Some(enclosing), ..Default::default()
+        }
+    }
+}
+
 impl Environment {
-    pub fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            enclosing: None,
-            values: HashMap::new(),
-        }))
+    pub fn new() -> Self {
+        Self { inner: Default::default() }
     }
 
-    pub fn from_enclosing(old: &Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            enclosing: Some(Rc::clone(old)),
-            values: HashMap::new(),
-        }))
+    pub fn enclose(&self) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(Inner::new(self.clone())))
+        }
     }
 
     pub fn define(&mut self, name: String, value: Value) {
-        self.values.insert(name, value);
+        self.inner.borrow_mut().values.insert(name, value);
     }
 
     pub fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
-        if let Some(v) = self.values.get_mut(&name.lexeme) {
+        if let Some(v) = self.inner.borrow_mut().values.get_mut(&name.lexeme) {
             *v = value;
             Ok(())
         } else if let Some(en) = &mut self.enclosing {

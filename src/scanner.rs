@@ -1,12 +1,12 @@
-use crate::{tokens::*, Reporter};
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::fmt;
+
+use crate::{tokens::*, types::Value};
 
 pub struct Scanner {
     source: String,
     start: usize,
     current: usize,
     line: u32,
-    reporter: Rc<RefCell<Reporter>>,
     had_eof: bool,
 }
 
@@ -25,17 +25,10 @@ impl fmt::Display for TokenError {
     }
 }
 
-#[derive(Debug)]
-enum SkipToken {
-    Comment,
-    Whitespace,
-}
-
 impl Scanner {
-    pub fn new(source: String, reporter: Rc<RefCell<Reporter>>) -> Self {
+    pub fn new(source: String) -> Self {
         Self {
             source,
-            reporter,
             start: 0,
             current: 0,
             line: 1,
@@ -141,7 +134,7 @@ impl Scanner {
             "true" => True,
             "var" => Var,
             "while" => While,
-            _ => None?,
+            _ => return None,
         })
     }
 
@@ -159,70 +152,70 @@ impl Scanner {
         }
     }
 
-    fn get_token(&mut self) -> Result<Result<Token, SkipToken>, TokenError> {
+    fn get_token(&mut self) -> Result<Token, TokenError> {
         use TokenType::*;
 
         self.start = self.current;
         if self.is_at_end() {
             self.had_eof = true;
-            return Ok(Ok(self.new_token_from_type(Eof)));
+            return Ok(self.new_token_from_type(Eof));
         }
 
         let c = self.advance();
         match c {
-            '(' => Ok(Ok(self.new_token_from_type(LeftParen))),
-            ')' => Ok(Ok(self.new_token_from_type(RightParen))),
-            '{' => Ok(Ok(self.new_token_from_type(LeftBrace))),
-            '}' => Ok(Ok(self.new_token_from_type(RightBrace))),
-            ',' => Ok(Ok(self.new_token_from_type(Comma))),
-            '.' => Ok(Ok(self.new_token_from_type(Dot))),
-            '-' => Ok(Ok(self.new_token_from_type(Minus))),
-            '+' => Ok(Ok(self.new_token_from_type(Plus))),
-            ';' => Ok(Ok(self.new_token_from_type(Semicolon))),
-            '*' => Ok(Ok(self.new_token_from_type(Star))),
-            '!' => Ok(Ok({
+            '(' => Ok(self.new_token_from_type(LeftParen)),
+            ')' => Ok(self.new_token_from_type(RightParen)),
+            '{' => Ok(self.new_token_from_type(LeftBrace)),
+            '}' => Ok(self.new_token_from_type(RightBrace)),
+            ',' => Ok(self.new_token_from_type(Comma)),
+            '.' => Ok(self.new_token_from_type(Dot)),
+            '-' => Ok(self.new_token_from_type(Minus)),
+            '+' => Ok(self.new_token_from_type(Plus)),
+            ';' => Ok(self.new_token_from_type(Semicolon)),
+            '*' => Ok(self.new_token_from_type(Star)),
+            '!' => Ok({
                 let type_ = if self.match_('=') { BangEqual } else { Bang };
                 self.new_token_from_type(type_)
-            })),
-            '=' => Ok(Ok({
+            }),
+            '=' => Ok({
                 let type_ = if self.match_('=') { EqualEqual } else { Equal };
                 self.new_token_from_type(type_)
-            })),
-            '>' => Ok(Ok({
+            }),
+            '>' => Ok({
                 let type_ = if self.match_('=') {
                     GreaterEqual
                 } else {
                     Greater
                 };
                 self.new_token_from_type(type_)
-            })),
-            '<' => Ok(Ok({
+            }),
+            '<' => Ok({
                 let type_ = if self.match_('=') { LessEqual } else { Less };
                 self.new_token_from_type(type_)
-            })),
+            }),
             '/' => {
                 if self.match_('/') {
                     // We are reading a comment, skip to end of line
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
-                    Ok(Err(SkipToken::Comment))
+                    Ok(Comment)
                 } else {
-                    Ok(Ok(self.new_token_from_type(Slash)))
+                    Ok(self.new_token_from_type(Slash))
                 }
             }
-            ' ' | '\r' | '\t' => Ok(Err(SkipToken::Whitespace)),
+            ' ' | '\r' | '\t' => Ok(Whitespace),
             '\n' => {
                 self.line += 1;
-                Ok(Err(SkipToken::Whitespace))
+                Ok(Whitespace)
             }
             '"' => {
                 let string = self.string().ok_or(TokenError::UnterminatedString)?;
-                Ok(Ok(self.new_token(String, Some(Value::String(string)))))
+                Ok(self.new_token(String, Some(Value::String(string))))
             }
             c if c.is_ascii_digit() => {
                 let number = self.number();
-                Ok(Ok(self.new_token(Number, Some(Value::Number(number)))))
+                Ok(self.new_token(Number, Some(Value::Number(number))))
             }
             c if c.is_ascii_alphabetic() => {
                 while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
@@ -231,7 +224,7 @@ impl Scanner {
                 let keyword = self
                     .get_keyword(&self.source[self.start..self.current])
                     .unwrap_or(Identifier);
-                Ok(Ok(self.new_token_from_type(keyword)))
+                Ok(self.new_token_from_type(keyword))
             }
             c => Err(TokenError::UnexpectedChar(c)),
         }
@@ -262,7 +255,7 @@ impl Iterator for Scanner {
             }
         }
         match token {
-            Ok(Ok(token)) => Some(token),
+            Ok(token) => Some(token),
             _ => unreachable!(),
         }
     }

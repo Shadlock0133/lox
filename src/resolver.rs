@@ -1,11 +1,10 @@
+use std::collections::HashMap;
+
 use crate::{
     errors::{ResolveError, ResolveResult},
     syntax::*,
     tokens::Token,
-    visitor::Visitor,
-    impl_visitor,
 };
-use std::collections::HashMap;
 
 pub struct VariableResolver {
     locals: HashMap<Expr, usize>,
@@ -23,7 +22,7 @@ impl VariableResolver {
 
     fn resolve(&mut self, statements: &mut [Stmt]) {
         for stmt in statements {
-            self.visit(stmt);
+            // self.visit(stmt);
         }
     }
 
@@ -44,28 +43,3 @@ impl VariableResolver {
         self.scopes.last_mut().map(|scope| scope.insert(name.lexeme, true));
     }
 }
-
-impl ExprVisitor<ResolveResult> for VariableResolver {}
-impl StmtVisitor<ResolveResult> for VariableResolver {}
-
-// impl_visitor!{ for VariableResolver, (&mut self, t: Block) -> ResolveResult {
-//     self.begin_scope();
-//     self.resolve(&mut t.statements);
-//     self.end_scope();
-//     Ok(())
-// }}
-
-// impl_visitor!{ for VariableResolver, (&mut self, t: Var) -> ResolveResult {
-//     self.declare(&t.name);
-//     t.init.as_mut().map(|init| self.visit(init));
-//     self.define(&t.name);
-//     Ok(())
-// }}
-
-// impl_visitor!{ for VariableResolver, (&mut self, t: Variable) -> ResolveResult {
-//     if self.scopes.last().map(|scope| !scope.get(&t.name.lexeme).unwrap_or(&false)).unwrap_or(false) {
-//         return Err(ResolveError);
-//     }
-//     self.resolve_local(&Expr::Variable(t), &t.name);
-//     Ok(())
-// }}

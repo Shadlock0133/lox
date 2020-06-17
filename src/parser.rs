@@ -4,23 +4,19 @@ use crate::{
     tokens::{
         Token,
         TokenType::{self, *},
-        Value,
     },
-    Reporter,
+    types::Value,
 };
-use std::{cell::RefCell, rc::Rc};
 
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
-    reporter: Rc<RefCell<Reporter>>,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>, reporter: Rc<RefCell<Reporter>>) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
-            reporter,
             current: 0,
         }
     }
@@ -68,7 +64,6 @@ impl Parser {
     }
 
     fn error<S: Into<std::string::String>>(&mut self, token: Token, message: S) -> ParseError {
-        self.reporter.borrow_mut().with_token(token, message);
         ParseError
     }
 
@@ -287,8 +282,8 @@ impl Parser {
             let equals = self.previous();
             let value = self.assignment()?;
 
-            if let Expr::Variable(variable) = expr {
-                return Ok(Expr::assign(variable.name, value));
+            if let Expr::Variable { name } = expr {
+                return Ok(Expr::assign(name, value));
             }
             self.error(equals, "Invalid assignment target.");
         }
