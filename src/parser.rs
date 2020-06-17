@@ -15,10 +15,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self {
-            tokens,
-            current: 0,
-        }
+        Self { tokens, current: 0 }
     }
 
     fn is_at_end(&self) -> bool {
@@ -48,11 +45,6 @@ impl Parser {
         }
     }
 
-    // It must take all possible types because we often check
-    // for match on multiple types;
-    // if we compared one by one outside match_ we might end up
-    // consumming multiple tokens instead of one
-    // eg. equality on "foo bar != == baz" would consume both "!= =="
     fn match_(&mut self, types: &[TokenType]) -> bool {
         for type_ in types {
             if self.check(*type_) {
@@ -64,7 +56,7 @@ impl Parser {
     }
 
     fn error<S: Into<std::string::String>>(&mut self, token: Token, message: S) -> ParseError {
-        ParseError
+        ParseError(token, message.into())
     }
 
     fn consume<S: Into<std::string::String>>(

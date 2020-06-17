@@ -2,30 +2,63 @@ use crate::{tokens::Token, types::Value};
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Assign { name: Token, value: Box<Expr> },
-    Binary { op: Token, left: Box<Expr>, right: Box<Expr> },
-    Call { callee: Box<Expr>, right_paren: Token, arguments: Vec<Expr> },
-    Grouping { expr: Box<Expr> },
-    Literal { value: Value },
-    Unary { op: Token, right: Box<Expr> },
-    Variable { name: Token },
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
+    Binary {
+        op: Token,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Call {
+        callee: Box<Expr>,
+        right_paren: Token,
+        arguments: Vec<Expr>,
+    },
+    Grouping {
+        expr: Box<Expr>,
+    },
+    Literal {
+        value: Value,
+    },
+    Unary {
+        op: Token,
+        right: Box<Expr>,
+    },
+    Variable {
+        name: Token,
+    },
 }
 
 impl Expr {
     pub fn assign(name: Token, value: Expr) -> Self {
-        Self::Assign { name, value: Box::new(value) }
+        Self::Assign {
+            name,
+            value: Box::new(value),
+        }
     }
 
     pub fn binary(op: Token, left: Expr, right: Expr) -> Self {
-        Self::Binary { op, left: Box::new(left), right: Box::new(right) }
+        Self::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        }
     }
 
     pub fn call(callee: Expr, right_paren: Token, arguments: Vec<Expr>) -> Self {
-        Self::Call { callee: Box::new(callee), right_paren, arguments }
+        Self::Call {
+            callee: Box::new(callee),
+            right_paren,
+            arguments,
+        }
     }
 
     pub fn grouping(expr: Expr) -> Self {
-        Self::Grouping { expr: Box::new(expr) }
+        Self::Grouping {
+            expr: Box::new(expr),
+        }
     }
 
     pub fn literal(value: Value) -> Self {
@@ -33,7 +66,10 @@ impl Expr {
     }
 
     pub fn unary(op: Token, right: Expr) -> Self {
-        Self::Unary { op, right: Box::new(right) }
+        Self::Unary {
+            op,
+            right: Box::new(right),
+        }
     }
 
     pub fn variable(name: Token) -> Self {
@@ -43,14 +79,37 @@ impl Expr {
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Block { statements: Vec<Stmt> },
-    Expression { expr: Expr },
-    Function { name: Token, params: Vec<Token>, body: Vec<Stmt> },
-    If { condition: Expr, then_branch: Box<Stmt>, else_branch: Option<Box<Stmt>> },
-    PrintStmt { expr: Expr },
-    Return { keyword: Token, value: Option<Expr> },
-    Var { name: Token, init: Option<Expr> },
-    While { condition: Expr, body: Box<Stmt> },
+    Block {
+        statements: Vec<Stmt>,
+    },
+    Expression {
+        expr: Expr,
+    },
+    Function {
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
+    },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
+    PrintStmt {
+        expr: Expr,
+    },
+    Return {
+        keyword: Token,
+        value: Option<Expr>,
+    },
+    Var {
+        name: Token,
+        init: Option<Expr>,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }
 
 impl Stmt {
@@ -67,7 +126,11 @@ impl Stmt {
     }
 
     pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {
-        Self::If { condition, then_branch: Box::new(then_branch), else_branch: else_branch.map(Box::new) }
+        Self::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch.map(Box::new),
+        }
     }
 
     pub fn print(expr: Expr) -> Self {
@@ -83,6 +146,9 @@ impl Stmt {
     }
 
     pub fn while_(condition: Expr, body: Stmt) -> Self {
-        Self::While { condition, body: Box::new(body) }
+        Self::While {
+            condition,
+            body: Box::new(body),
+        }
     }
 }

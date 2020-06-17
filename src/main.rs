@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use structopt::StructOpt;
 use anyhow::Result;
+use structopt::StructOpt;
 
 use lox::Lox;
 

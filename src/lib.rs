@@ -35,12 +35,6 @@ impl Lox {
     pub fn run_file<P: AsRef<Path>>(&mut self, file: P) -> Result<()> {
         let script = fs::read_to_string(file)?;
         self.run(script)?;
-        // if self.reporter.borrow().had_error {
-        //     exit(65);
-        // }
-        // if self.had_runtime_error {
-        //     exit(70);
-        // }
         Ok(())
     }
 
@@ -54,11 +48,13 @@ impl Lox {
 
             let mut input = String::new();
             reader.read_line(&mut input)?;
-            if input.is_empty() { break Ok(()); }
+            if input.trim().is_empty() {
+                break Ok(());
+            }
             let res = self.run(input);
-            // if let Err(e) = todo!() {
-            //     eprintln!("Runtime error:\n{}", e);
-            // }
+            if let Err(e) = res {
+                eprintln!("Runtime error:\n{}", e);
+            }
         }
     }
 
@@ -69,8 +65,7 @@ impl Lox {
             .collect::<std::result::Result<_, errors::TokenError>>()?;
         eprintln!("{:#?}", tokens);
         let mut parser = Parser::new(tokens);
-        let program = parser.parse();
-        let mut program = program.unwrap();
+        let program = parser.parse()?;
         eprintln!("{:?}", program);
         // let result = self.interpreter.interpret(&mut program);
         // result?;
@@ -78,27 +73,3 @@ impl Lox {
         Ok(())
     }
 }
-
-// pub(crate) struct Reporter {
-//     had_error: bool,
-// }
-
-// impl Reporter {
-//     fn report<S: Into<String>>(&mut self, line: u32, where_: String, message: S) {
-//         eprintln!("[line {}] Error{}: {}", line, where_, message.into());
-//         self.had_error = true;
-//     }
-
-//     fn error<S: Into<String>>(&mut self, line: u32, message: S) {
-//         self.report(line, "".to_owned(), message);
-//     }
-
-//     fn with_token<S: Into<String>>(&mut self, token: Token, message: S) {
-//         let where_ = if token.type_ == TokenType::Eof {
-//             " at end".to_owned()
-//         } else {
-//             " at '".to_owned() + &token.lexeme + "'"
-//         };
-//         self.report(token.line, where_, message);
-//     }
-// }

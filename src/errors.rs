@@ -1,4 +1,9 @@
-use crate::{tokens::Token, types::Value};
+use std::fmt;
+
+use crate::{
+    tokens::{Token, TokenType},
+    types::Value,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
@@ -27,7 +32,22 @@ pub enum TokenError {
 }
 
 #[derive(Debug)]
-pub struct ParseError;
+pub struct ParseError(pub Token, pub String);
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0.type_ {
+            TokenType::Eof => write!(f, "[line {}] Error at end: {}", self.0.line, self.1),
+            _ => write!(
+                f,
+                "[line {}] Error at {}: {}",
+                self.0.line, self.0.lexeme, self.1
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
 
 pub type ParseResult<T> = Result<T, ParseError>;
 

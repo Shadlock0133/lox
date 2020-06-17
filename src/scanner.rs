@@ -55,7 +55,7 @@ impl Scanner {
     // TODO: Add quote escaping for fun and profit
     fn string(&mut self) -> Option<String> {
         loop {
-        // while self.peek() != '"' && !self.is_at_end() {
+            // while self.peek() != '"' && !self.is_at_end() {
             if self.peek() != '\\' && self.peek_next() == '"' {
                 self.advance();
                 break;
