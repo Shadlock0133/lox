@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::types::Value;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -53,12 +53,22 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,
     pub literal: Option<Value>,
     pub line: u32,
+}
+
+impl Token {
+    pub fn can_skip(&self) -> bool {
+        match self.type_ {
+            TokenType::Comment | TokenType::Whitespace => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Token {

@@ -101,20 +101,18 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> ParseResult<Stmt> {
-        #[allow(clippy::redundant_closure_call)]
-        (|| {
-            if self.match_(&[Fun]) {
-                self.function("function")
-            } else if self.match_(&[Var]) {
-                self.var_declaration()
-            } else {
-                self.statement()
-            }
-        })()
-        .map_err(|x| {
-            self.synchronize();
-            x
-        })
+        let decl = if self.match_(&[Fun]) {
+            self.function("function")
+        } else if self.match_(&[Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+
+        if decl.is_err() {
+            self.synchronize()
+        }
+        decl
     }
 
     fn function(&mut self, kind: &str) -> ParseResult<Stmt> {

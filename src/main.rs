@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use structopt::StructOpt;
 use anyhow::Result;
 
@@ -5,7 +7,7 @@ use lox::Lox;
 
 #[derive(StructOpt)]
 struct Opt {
-    input_file: Option<Path>,
+    input_file: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {

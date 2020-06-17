@@ -18,6 +18,14 @@ impl RuntimeError {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum TokenError {
+    #[error("Unexpected character: {0}")]
+    UnexpectedChar(char),
+    #[error("Unterminated string")]
+    UnterminatedString,
+}
+
 #[derive(Debug)]
 pub struct ParseError;
 

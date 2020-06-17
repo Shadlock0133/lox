@@ -1,6 +1,4 @@
-use std::fmt;
-
-use crate::{tokens::*, types::Value};
+use crate::{errors::TokenError, tokens::*, types::Value};
 
 pub struct Scanner {
     source: String,
@@ -8,21 +6,6 @@ pub struct Scanner {
     current: usize,
     line: u32,
     had_eof: bool,
-}
-
-#[derive(Debug)]
-enum TokenError {
-    UnexpectedChar(char),
-    UnterminatedString,
-}
-
-impl fmt::Display for TokenError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TokenError::UnterminatedString => write!(f, "Unterminated string"),
-            TokenError::UnexpectedChar(ch) => write!(f, "Unexpected character: {}", ch),
-        }
-    }
 }
 
 impl Scanner {
@@ -138,7 +121,7 @@ impl Scanner {
         })
     }
 
-    fn new_token_from_type(&self, type_: TokenType) -> Token {
+    fn from_type(&self, type_: TokenType) -> Token {
         self.new_token(type_, None)
     }
 
@@ -158,28 +141,28 @@ impl Scanner {
         self.start = self.current;
         if self.is_at_end() {
             self.had_eof = true;
-            return Ok(self.new_token_from_type(Eof));
+            return Ok(self.from_type(Eof));
         }
 
         let c = self.advance();
         match c {
-            '(' => Ok(self.new_token_from_type(LeftParen)),
-            ')' => Ok(self.new_token_from_type(RightParen)),
-            '{' => Ok(self.new_token_from_type(LeftBrace)),
-            '}' => Ok(self.new_token_from_type(RightBrace)),
-            ',' => Ok(self.new_token_from_type(Comma)),
-            '.' => Ok(self.new_token_from_type(Dot)),
-            '-' => Ok(self.new_token_from_type(Minus)),
-            '+' => Ok(self.new_token_from_type(Plus)),
-            ';' => Ok(self.new_token_from_type(Semicolon)),
-            '*' => Ok(self.new_token_from_type(Star)),
+            '(' => Ok(self.from_type(LeftParen)),
+            ')' => Ok(self.from_type(RightParen)),
+            '{' => Ok(self.from_type(LeftBrace)),
+            '}' => Ok(self.from_type(RightBrace)),
+            ',' => Ok(self.from_type(Comma)),
+            '.' => Ok(self.from_type(Dot)),
+            '-' => Ok(self.from_type(Minus)),
+            '+' => Ok(self.from_type(Plus)),
+            ';' => Ok(self.from_type(Semicolon)),
+            '*' => Ok(self.from_type(Star)),
             '!' => Ok({
                 let type_ = if self.match_('=') { BangEqual } else { Bang };
-                self.new_token_from_type(type_)
+                self.from_type(type_)
             }),
             '=' => Ok({
                 let type_ = if self.match_('=') { EqualEqual } else { Equal };
-                self.new_token_from_type(type_)
+                self.from_type(type_)
             }),
             '>' => Ok({
                 let type_ = if self.match_('=') {
@@ -187,11 +170,11 @@ impl Scanner {
                 } else {
                     Greater
                 };
-                self.new_token_from_type(type_)
+                self.from_type(type_)
             }),
             '<' => Ok({
                 let type_ = if self.match_('=') { LessEqual } else { Less };
-                self.new_token_from_type(type_)
+                self.from_type(type_)
             }),
             '/' => {
                 if self.match_('/') {
@@ -199,15 +182,15 @@ impl Scanner {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
-                    Ok(Comment)
+                    Ok(self.from_type(Comment))
                 } else {
-                    Ok(self.new_token_from_type(Slash))
+                    Ok(self.from_type(Slash))
                 }
             }
-            ' ' | '\r' | '\t' => Ok(Whitespace),
+            ' ' | '\r' | '\t' => Ok(self.from_type(Whitespace)),
             '\n' => {
                 self.line += 1;
-                Ok(Whitespace)
+                Ok(self.from_type(Whitespace))
             }
             '"' => {
                 let string = self.string().ok_or(TokenError::UnterminatedString)?;
@@ -224,7 +207,7 @@ impl Scanner {
                 let keyword = self
                     .get_keyword(&self.source[self.start..self.current])
                     .unwrap_or(Identifier);
-                Ok(self.new_token_from_type(keyword))
+                Ok(self.from_type(keyword))
             }
             c => Err(TokenError::UnexpectedChar(c)),
         }
@@ -232,31 +215,12 @@ impl Scanner {
 }
 
 impl Iterator for Scanner {
-    type Item = Token;
+    type Item = Result<Token, TokenError>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.had_eof {
             return None;
         }
-        let mut token = self.get_token();
-        loop {
-            match token {
-                Err(err) => {
-                    self.reporter
-                        .borrow_mut()
-                        .error(self.line, format!("{}", err));
-                    token = self.get_token();
-                    continue;
-                }
-                Ok(Err(_)) => {
-                    token = self.get_token();
-                    continue;
-                }
-                _ => break,
-            }
-        }
-        match token {
-            Ok(token) => Some(token),
-            _ => unreachable!(),
-        }
+        Some(self.get_token())
+            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
     }
 }

@@ -1,8 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::{RefCell, Ref, RefMut}, collections::HashMap, rc::Rc};
 
 use crate::{errors::RuntimeError, tokens::Token, types::Value};
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Environment {
     inner: Rc<RefCell<Inner>>,
 }
@@ -30,6 +30,14 @@ impl Environment {
         Self {
             inner: Rc::new(RefCell::new(Inner::new(self.clone())))
         }
+    }
+
+    fn borrow(&self) -> Ref<Inner> {
+        self.inner.borrow()
+    }
+
+    fn borrow_mut(&self) -> RefMut<Inner> {
+        self.inner.borrow_mut()
     }
 
     pub fn define(&mut self, name: String, value: Value) {

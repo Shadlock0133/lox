@@ -1,5 +1,6 @@
 use crate::{tokens::Token, types::Value};
 
+#[derive(Clone, Debug)]
 pub enum Expr {
     Assign { name: Token, value: Box<Expr> },
     Binary { op: Token, left: Box<Expr>, right: Box<Expr> },
@@ -40,6 +41,7 @@ impl Expr {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Stmt {
     Block { statements: Vec<Stmt> },
     Expression { expr: Expr },
