@@ -221,6 +221,5 @@ impl Iterator for Scanner {
             return None;
         }
         Some(self.get_token())
-            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
     }
 }

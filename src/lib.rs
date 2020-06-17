@@ -10,7 +10,7 @@ pub mod types;
 
 use std::{
     fs,
-    io::{self, BufRead, Write},
+    io::{self, Write},
     path::Path,
 };
 
@@ -45,8 +45,7 @@ impl Lox {
     }
 
     pub fn run_repl(&mut self) -> Result<()> {
-        let stdin = io::stdin();
-        let mut reader = io::BufReader::new(stdin.lock());
+        let reader = io::stdin();
         loop {
             let out = io::stdout();
             let mut output = out.lock();
@@ -55,6 +54,7 @@ impl Lox {
 
             let mut input = String::new();
             reader.read_line(&mut input)?;
+            if input.is_empty() { break Ok(()); }
             let res = self.run(input);
             // if let Err(e) = todo!() {
             //     eprintln!("Runtime error:\n{}", e);
@@ -65,8 +65,9 @@ impl Lox {
     fn run(&mut self, source: String) -> Result<()> {
         let scanner = Scanner::new(source);
         let tokens: Vec<Token> = scanner
+            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
             .collect::<std::result::Result<_, errors::TokenError>>()?;
-        eprintln!("{:?}", tokens);
+        eprintln!("{:#?}", tokens);
         let mut parser = Parser::new(tokens);
         let program = parser.parse();
         let mut program = program.unwrap();
