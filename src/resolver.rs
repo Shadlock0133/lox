@@ -22,7 +22,7 @@ impl VariableResolver {
 
     fn resolve(&mut self, statements: &mut [Stmt]) {
         for stmt in statements {
-            // self.visit(stmt);
+            self.visit_stmt(stmt);
         }
     }
 

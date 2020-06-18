@@ -5,49 +5,62 @@ use crate::{
     types::Value,
 };
 
+#[derive(Debug)]
+pub struct GenericError(pub Option<Token>, pub String);
+
+impl GenericError {
+    fn to_string(&self, kind: &'static str) -> String {
+        match &self.0 {
+            Some(token) => {
+                let lexeme = match token.type_ {
+                    TokenType::Eof => "end",
+                    _ => &token.lexeme,
+                };
+                format!(
+                    "[line {}] {}Error at {}: {}",
+                    token.line, kind, lexeme, self.1
+                )
+            }
+            None => format!("{}Error {}", kind, self.1),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
     #[error("Unexpected return")]
     Return(Value),
     #[error("Unexpected break")]
     Break,
-    #[error("Runtime error at {0}: {1}")]
-    Error(Token, String),
+    #[error("{}", _0.to_string("Runtime "))]
+    Error(GenericError),
 }
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 impl RuntimeError {
-    pub fn new<S: Into<String>>(token: &Token, message: S) -> Self {
-        Self::Error(token.clone(), message.into())
+    pub fn new<S: Into<String>>(token: Option<&Token>, message: S) -> Self {
+        Self::Error(GenericError(token.cloned(), message.into()))
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TokenError {
+pub enum TokenizerError {
     #[error("Unexpected character: {0}")]
     UnexpectedChar(char),
     #[error("Unterminated string")]
     UnterminatedString,
 }
 
-#[derive(Debug)]
-pub struct ParseError(pub Token, pub String);
+#[derive(Debug, thiserror::Error)]
+#[error("{}", self.0.to_string("Parse "))]
+pub struct ParseError(pub GenericError);
 
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.0.type_ {
-            TokenType::Eof => write!(f, "[line {}] Error at end: {}", self.0.line, self.1),
-            _ => write!(
-                f,
-                "[line {}] Error at {}: {}",
-                self.0.line, self.0.lexeme, self.1
-            ),
-        }
+impl ParseError {
+    pub fn new(token: Option<Token>, msg: String) -> Self {
+        Self(GenericError(token, msg))
     }
 }
-
-impl std::error::Error for ParseError {}
 
 pub type ParseResult<T> = Result<T, ParseError>;
 

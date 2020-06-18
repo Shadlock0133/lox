@@ -1,9 +1,9 @@
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{fmt, sync::Arc};
 
 use crate::{
     // environment::Environment,
     errors::RuntimeError,
-    // interpreter::Interpreter,
+    interpreter::Interpreter,
     tokens::Token,
 };
 
@@ -74,7 +74,7 @@ impl Value {
 // #[derive(Clone)]
 // pub enum Fun {
 //     Foreign {
-//         inner: Rc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>,
+//         inner: Arc<dyn Fn(&mut Interpreter, &mut [Value]) -> Value>,
 //         arity: usize,
 //     },
 //     Native {

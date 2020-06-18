@@ -1,4 +1,4 @@
-use crate::{errors::TokenError, tokens::*, types::Value};
+use crate::{errors::TokenizerError, tokens::*, types::Value};
 
 pub struct Scanner {
     source: String,
@@ -135,7 +135,7 @@ impl Scanner {
         }
     }
 
-    fn get_token(&mut self) -> Result<Token, TokenError> {
+    fn get_token(&mut self) -> Result<Token, TokenizerError> {
         use TokenType::*;
 
         self.start = self.current;
@@ -193,7 +193,7 @@ impl Scanner {
                 Ok(self.from_type(Whitespace))
             }
             '"' => {
-                let string = self.string().ok_or(TokenError::UnterminatedString)?;
+                let string = self.string().ok_or(TokenizerError::UnterminatedString)?;
                 Ok(self.new_token(String, Some(Value::String(string))))
             }
             c if c.is_ascii_digit() => {
@@ -209,13 +209,13 @@ impl Scanner {
                     .unwrap_or(Identifier);
                 Ok(self.from_type(keyword))
             }
-            c => Err(TokenError::UnexpectedChar(c)),
+            c => Err(TokenizerError::UnexpectedChar(c)),
         }
     }
 }
 
 impl Iterator for Scanner {
-    type Item = Result<Token, TokenError>;
+    type Item = Result<Token, TokenizerError>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.had_eof {
             return None;

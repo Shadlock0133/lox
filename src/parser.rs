@@ -56,7 +56,7 @@ impl Parser {
     }
 
     fn error<S: Into<std::string::String>>(&mut self, token: Token, message: S) -> ParseError {
-        ParseError(token, message.into())
+        ParseError::new(Some(token), message.into())
     }
 
     fn consume<S: Into<std::string::String>>(

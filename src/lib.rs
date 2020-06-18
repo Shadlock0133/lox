@@ -1,6 +1,6 @@
 // pub mod environment;
 pub mod errors;
-// pub mod interpreter;
+pub mod interpreter;
 pub mod parser;
 // pub mod resolver;
 pub mod ast;
@@ -10,7 +10,7 @@ pub mod types;
 
 use std::{fs, path::Path};
 
-// use interpreter::*;
+use interpreter::*;
 use parser::*;
 use tokenizer::*;
 use tokens::*;
@@ -18,13 +18,13 @@ use tokens::*;
 use anyhow::Result;
 
 pub struct Lox {
-    // interpreter: Interpreter,
+    interpreter: Interpreter,
 }
 
 impl Lox {
     pub fn new() -> Self {
         Self {
-            // interpreter: Interpreter::new(io::stdout()),
+            interpreter: Interpreter::new(std::io::stdout()),
         }
     }
 
@@ -40,7 +40,7 @@ impl Lox {
         let mut rl = rustyline::Editor::<()>::new();
         let mut out = std::io::stdout();
         loop {
-            // Workaround until rustyline supports mingw
+            // FIXME: Workaround until rustyline supports mingw
             write!(out, "> ")?;
             out.flush()?;
 
@@ -62,12 +62,10 @@ impl Lox {
         let scanner = Scanner::new(source);
         let tokens: Vec<Token> = scanner
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-            .collect::<std::result::Result<_, errors::TokenError>>()?;
-        // eprintln!("{:#?}", tokens);
+            .collect::<std::result::Result<_, errors::TokenizerError>>()?;
         let mut parser = Parser::new(tokens);
-        let program = parser.parse()?;
-        // eprintln!("{:?}", program);
-        // self.interpreter.interpret(&mut program)?;
+        let mut program = parser.parse()?;
+        self.interpreter.interpret(&mut program)?;
 
         Ok(())
     }
