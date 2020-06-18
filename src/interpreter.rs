@@ -1,7 +1,7 @@
 use crate::{
     environment::Environment,
     errors::{RuntimeError, RuntimeResult},
-    syntax::*,
+    ast::*,
     // tokens::{Token, TokenType},
     types::{Fun, Value},
 };

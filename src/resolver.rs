@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     errors::{ResolveError, ResolveResult},
-    syntax::*,
+    ast::*,
     tokens::Token,
 };
 

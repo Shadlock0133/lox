@@ -1,6 +1,6 @@
 use crate::{
+    ast::*,
     errors::{ParseError, ParseResult},
-    syntax::*,
     tokens::{
         Token,
         TokenType::{self, *},

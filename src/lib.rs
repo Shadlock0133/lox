@@ -3,20 +3,16 @@ pub mod errors;
 // pub mod interpreter;
 pub mod parser;
 // pub mod resolver;
-pub mod scanner;
-pub mod syntax;
+pub mod ast;
+pub mod tokenizer;
 pub mod tokens;
 pub mod types;
 
-use std::{
-    fs,
-    io::{self, Write},
-    path::Path,
-};
+use std::{fs, path::Path};
 
 // use interpreter::*;
 use parser::*;
-use scanner::*;
+use tokenizer::*;
 use tokens::*;
 
 use anyhow::Result;
@@ -39,21 +35,25 @@ impl Lox {
     }
 
     pub fn run_repl(&mut self) -> Result<()> {
-        let reader = io::stdin();
-        loop {
-            let out = io::stdout();
-            let mut output = out.lock();
-            write!(output, "> ")?;
-            output.flush()?;
+        use std::io::Write;
 
-            let mut input = String::new();
-            reader.read_line(&mut input)?;
-            if input.trim().is_empty() {
-                break Ok(());
-            }
-            let res = self.run(input);
-            if let Err(e) = res {
-                eprintln!("Runtime error:\n{}", e);
+        let mut rl = rustyline::Editor::<()>::new();
+        let mut out = std::io::stdout();
+        loop {
+            // Workaround until rustyline supports mingw
+            write!(out, "> ")?;
+            out.flush()?;
+
+            match rl.readline("") {
+                Ok(input) => {
+                    let res = self.run(input);
+                    if let Err(e) = res {
+                        eprintln!("Runtime error:\n{}", e);
+                    }
+                }
+                Err(rustyline::error::ReadlineError::Eof)
+                | Err(rustyline::error::ReadlineError::Interrupted) => return Ok(()),
+                Err(e) => return Err(e.into()),
             }
         }
     }
@@ -63,12 +63,11 @@ impl Lox {
         let tokens: Vec<Token> = scanner
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
             .collect::<std::result::Result<_, errors::TokenError>>()?;
-        eprintln!("{:#?}", tokens);
+        // eprintln!("{:#?}", tokens);
         let mut parser = Parser::new(tokens);
         let program = parser.parse()?;
-        eprintln!("{:?}", program);
-        // let result = self.interpreter.interpret(&mut program);
-        // result?;
+        // eprintln!("{:?}", program);
+        // self.interpreter.interpret(&mut program)?;
 
         Ok(())
     }
