@@ -59,8 +59,8 @@ impl Lox {
     }
 
     fn run(&mut self, source: String) -> Result<()> {
-        let scanner = Scanner::new(source);
-        let tokens: Vec<Token> = scanner
+        let tokenizer = Tokenizer::new(source);
+        let tokens: Vec<Token> = tokenizer
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
             .collect::<std::result::Result<_, errors::TokenizerError>>()?;
         let mut parser = Parser::new(tokens);

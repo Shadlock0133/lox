@@ -183,3 +183,36 @@ impl Interpreter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let expr = |mut x| Interpreter::new(vec![]).visit_expr(&mut x).unwrap();
+        let from_type = |t| Token {
+            type_: t,
+            lexeme: "".into(),
+            literal: None,
+            line: 0,
+        };
+
+        assert_eq!(
+            expr(Expr::binary(
+                from_type(TokenType::Plus),
+                Expr::literal(Value::Number(1.0)),
+                Expr::literal(Value::Number(2.0))
+            )),
+            Value::Number(3.0)
+        );
+        assert_eq!(
+            expr(Expr::binary(
+                from_type(TokenType::Plus),
+                Expr::literal(Value::String("foo".into())),
+                Expr::literal(Value::String("bar".into()))
+            )),
+            Value::String("foobar".into())
+        );
+    }
+}

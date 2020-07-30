@@ -1,6 +1,6 @@
 use crate::{errors::TokenizerError, tokens::*, types::Value};
 
-pub struct Scanner {
+pub struct Tokenizer {
     source: String,
     start: usize,
     current: usize,
@@ -8,7 +8,7 @@ pub struct Scanner {
     had_eof: bool,
 }
 
-impl Scanner {
+impl Tokenizer {
     pub fn new(source: String) -> Self {
         Self {
             source,
@@ -214,12 +214,45 @@ impl Scanner {
     }
 }
 
-impl Iterator for Scanner {
+impl Iterator for Tokenizer {
     type Item = Result<Token, TokenizerError>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.had_eof {
             return None;
         }
         Some(self.get_token())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let run = |x: &str| {
+            Tokenizer::new(x.into())
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+
+        assert_eq!(run(r#""test""#)[0].type_, TokenType::String);
+        assert_eq!(run(r#""test""#)[0].lexeme, "\"test\"");
+
+        assert_eq!(run("123")[0].type_, TokenType::Number);
+        assert_eq!(run("-123.2")[0].type_, TokenType::Minus);
+        assert_eq!(run("-123.2")[1].type_, TokenType::Number);
+        assert_eq!(run("-123.2")[1].lexeme, "123.2");
+        assert_eq!(run("-123.2")[2].type_, TokenType::Eof);
+
+        assert_eq!(run("true")[0].type_, TokenType::True);
+        assert_eq!(run("false")[0].type_, TokenType::False);
+
+        assert_eq!(run(" \r\t\n ")[0].type_, TokenType::Whitespace);
+        assert_eq!(run(" \r\t\n ")[1].type_, TokenType::Whitespace);
+        assert_eq!(run(" \r\t\n ")[2].type_, TokenType::Whitespace);
+        assert_eq!(run(" \r\t\n ")[3].type_, TokenType::Whitespace);
+        assert_eq!(run(" \r\t\n ")[4].type_, TokenType::Whitespace);
+        assert_eq!(run(" \r\t\n ")[5].type_, TokenType::Eof);
     }
 }

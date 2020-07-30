@@ -419,3 +419,34 @@ impl Parser {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tokenizer::Tokenizer;
+    use crate::tokens::TokenType;
+
+    #[test]
+    fn test() {
+        let expr = |x: &str| {
+            Parser::new(
+                Tokenizer::new(x.into())
+                    .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap(),
+            )
+            .expression_statement()
+            .unwrap()
+        };
+
+        macro_rules! test_expr {
+            ($x:expr, $p:pat) => {
+                assert!(matches!(expr($x), $p), "{:?}", expr("1 + 2"));
+            };
+        }
+
+        test_expr!("1 + 2;", Stmt::Expression {
+            expr: Expr::Binary { op: Token { type_: TokenType::Plus, .. },  .. }
+        });
+    }
+}
