@@ -1,6 +1,6 @@
 use crate::{
     ast::*,
-    // environment::Environment,
+    environment::Environment,
     errors::{RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
     types::Value,
@@ -10,28 +10,28 @@ use std::{io::Write, time::Instant};
 pub struct Interpreter {
     start_time: Instant,
     output: Box<dyn Write>,
-    // pub global: Environment,
-    // current: Environment,
+    pub global: Environment,
+    current: Environment,
 }
 
 impl Interpreter {
     pub fn new<W: Write + 'static>(output: W) -> Self {
-        // let global = Environment::new();
+        let mut global = Environment::new();
 
-        // global.define(
-        //     "clock".into(),
-        //     Value::fun(0, |inter, _| {
-        //         let dur = inter.start_time.elapsed();
-        //         Value::Number(dur.as_nanos() as f64 * 1e-9)
-        //     }),
-        // );
+        global.define(
+            "clock".into(),
+            Value::fun(0, |inter, _| {
+                let dur = inter.start_time.elapsed();
+                Value::Number(dur.as_nanos() as f64 * 1e-9)
+            }),
+        );
 
-        // let current = Rc::clone(&global);
+        let current = global.clone();
         Self {
             start_time: Instant::now(),
             output: Box::new(output),
-            // global,
-            // current,
+            global,
+            current,
         }
     }
 
@@ -52,17 +52,17 @@ impl Interpreter {
     pub fn execute_block(
         &mut self,
         statements: &mut [Stmt],
-        // environment: Environment,
+        environment: Environment,
     ) -> RuntimeResult<()> {
-        // let previous = Rc::clone(&self.current);
+        let previous = self.current.clone();
         let result = (|| {
-            // self.current = environment;
+            self.current = environment;
             for statement in statements {
                 self.visit_stmt(statement)?;
             }
             Ok(())
         })();
-        // self.current = previous;
+        self.current = previous;
         result
     }
 
