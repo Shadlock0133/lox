@@ -57,11 +57,11 @@ impl Environment {
     }
 
     fn read(&self) -> RwLockReadGuard<Inner> {
-        self.inner.read().unwrap()
+        self.inner.try_read().unwrap()
     }
 
-    fn write(&self) -> RwLockWriteGuard<Inner> {
-        self.inner.write().unwrap()
+    fn write(&mut self) -> RwLockWriteGuard<Inner> {
+        self.inner.try_write().unwrap()
     }
 
     pub fn define(&mut self, name: String, value: Value) {
@@ -69,10 +69,11 @@ impl Environment {
     }
 
     pub fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
-        if let Some(v) = self.write().values.get_mut(&name.lexeme) {
+        let mut write = self.write();
+        if let Some(v) = write.values.get_mut(&name.lexeme) {
             *v = value;
             Ok(())
-        } else if let Some(en) = &mut self.write().enclosing {
+        } else if let Some(ref mut en) = write.enclosing {
             en.assign(name, value)
         } else {
             Err(RuntimeError::new(
@@ -83,7 +84,7 @@ impl Environment {
     }
 
     pub fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
-        if let Some(value) = self.write().values.get(&name.lexeme) {
+        if let Some(value) = self.read().values.get(&name.lexeme) {
             Ok(value.clone())
         } else if let Some(en) = &self.read().enclosing {
             en.get(name)
