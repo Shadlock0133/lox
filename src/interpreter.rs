@@ -134,10 +134,34 @@ impl<'a> Interpreter<'a> {
             }
 
             Expr::Call {
-                callee: _,
-                right_paren: _,
-                arguments: _,
-            } => todo!("visit_expr"),
+                callee,
+                right_paren,
+                arguments,
+            } => {
+                let callee = self.visit_expr(callee)?;
+                let mut arguments: Vec<Value> = arguments
+                    .iter_mut()
+                    .map(|e| self.visit_expr(e))
+                    .collect::<Result<_, _>>()?;
+
+                match callee {
+                    Value::Fun(mut f) if f.arity() == arguments.len() => {
+                        f.call(self, &mut arguments)
+                    }
+                    Value::Fun(f) => Err(RuntimeError::new(
+                        Some(right_paren),
+                        format!(
+                            "Expected {} arguments but got {}",
+                            f.arity(),
+                            arguments.len()
+                        ),
+                    )),
+                    _ => Err(RuntimeError::new(
+                        Some(right_paren),
+                        "Can only call functions and classes",
+                    )),
+                }
+            }
 
             Expr::Grouping { expr } => self.visit_expr(expr),
 
@@ -170,11 +194,17 @@ impl<'a> Interpreter<'a> {
 
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
-            Stmt::Function {
-                name: _,
-                params: _,
-                body: _,
-            } => todo!("visit_stmt"),
+            Stmt::Function { name, params, body } => {
+                let closure = self.current.enclose();
+                let function = Value::Fun(crate::types::Fun::Native {
+                    name: Box::new(name.clone()),
+                    body: body.clone(),
+                    params: params.clone(),
+                    closure,
+                });
+                self.current.define(name.lexeme.clone(), function);
+                Ok(())
+            }
 
             Stmt::If {
                 condition,
@@ -195,10 +225,13 @@ impl<'a> Interpreter<'a> {
                     .map_err(|e| RuntimeError::new(None, e.to_string()))
             }
 
-            Stmt::Return {
-                keyword: _,
-                value: _,
-            } => todo!("visit_stmt"),
+            Stmt::Return { keyword, value } => Err(RuntimeError::Return(
+                value
+                    .as_mut()
+                    .map(|e| self.visit_expr(e))
+                    .transpose()?
+                    .unwrap_or(Value::Nil),
+            )),
 
             Stmt::Var { name, init } => {
                 let value = init
@@ -210,15 +243,12 @@ impl<'a> Interpreter<'a> {
                 Ok(())
             }
 
-            Stmt::While {
-                condition,
-                body,
-            } => {
+            Stmt::While { condition, body } => {
                 while self.visit_expr(condition)?.is_truthy() {
                     self.visit_stmt(body)?;
                 }
                 Ok(())
-            },
+            }
         }
     }
 }
@@ -231,15 +261,6 @@ mod tests {
         Token {
             type_: t,
             lexeme: "".into(),
-            literal: None,
-            line: 0,
-        }
-    }
-
-    fn identifier(name: &str) -> Token {
-        Token {
-            type_: TokenType::Identifier,
-            lexeme: name.into(),
             literal: None,
             line: 0,
         }
@@ -269,87 +290,67 @@ mod tests {
 
     #[test]
     fn print() {
-        let run = |x: &mut [_]| {
+        let run = |x: &str| {
             let mut v = vec![];
-            Interpreter::new(&mut v).interpret(x).unwrap();
+            let tokens = crate::tokenizer::Tokenizer::new(x.to_string())
+                .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+            Interpreter::new(&mut v).interpret(&mut ast).unwrap();
             v
         };
 
-        assert_eq!(
-            run(&mut [Stmt::print(Expr::literal(Value::String("one".into())))]),
-            b"one\n"
-        );
+        assert_eq!(run("print \"one\";"), b"one\n");
+
+        assert_eq!(run("print true;"), b"true\n");
+
+        assert_eq!(run("print 1 + 2;"), b"3\n");
+
+        assert_eq!(run("var a = 1; print a;"), b"1\n");
+
+        assert_eq!(run("var a = 1; print a = 2;"), b"2\n");
 
         assert_eq!(
-            run(&mut [Stmt::print(Expr::literal(Value::Bool(true)))]),
-            b"true\n"
-        );
-
-        assert_eq!(
-            run(&mut [Stmt::print(Expr::binary(
-                from_type(TokenType::Plus),
-                Expr::literal(Value::Number(1.0)),
-                Expr::literal(Value::Number(2.0)),
-            ))]),
-            b"3\n"
-        );
-
-        assert_eq!(
-            run(&mut [
-                Stmt::var(identifier("a"), Some(Expr::literal(Value::Number(1.0)))),
-                Stmt::print(Expr::variable(identifier("a")))
-            ]),
-            b"1\n"
-        );
-
-        assert_eq!(
-            run(&mut [
-                Stmt::var(identifier("a"), Some(Expr::literal(Value::Number(1.0)))),
-                Stmt::print(Expr::assign(
-                    identifier("a"),
-                    Expr::literal(Value::Number(2.0))
-                ))
-            ]),
-            b"2\n"
-        );
-
-        assert_eq!(
-            run(&mut [
-                Stmt::var(identifier("a"), Some(Expr::literal(Value::Number(1.0)))),
-                Stmt::var(identifier("b"), Some(Expr::literal(Value::Number(1.0)))),
-                Stmt::print(Expr::variable(identifier("a"))),
-                Stmt::print(Expr::variable(identifier("b"))),
-                Stmt::block(vec![
-                    Stmt::var(identifier("a"), Some(Expr::literal(Value::Number(2.0)))),
-                    Stmt::expression(Expr::assign(
-                        identifier("b"),
-                        Expr::literal(Value::Number(2.0))
-                    )),
-                    Stmt::print(Expr::variable(identifier("a"))),
-                    Stmt::print(Expr::variable(identifier("b"))),
-                ]),
-                Stmt::print(Expr::variable(identifier("a"))),
-                Stmt::print(Expr::variable(identifier("b"))),
-            ]),
+            run(
+                "var a = 1;
+                var b = 1;
+                print a;
+                print b;
+                {
+                    var a = 2;
+                    b = 2;
+                    print a;
+                    print b;
+                }
+                print a;
+                print b;"
+            ),
             b"1\n1\n2\n2\n1\n2\n"
         );
 
         assert_eq!(
-            run(&mut [
-                Stmt::var(identifier("a"), Some(Expr::literal(Value::Number(1.0)))),
-                Stmt::block(vec![
-                    Stmt::var(
-                        identifier("a"),
-                        Some(Expr::binary(
-                            from_type(TokenType::Plus),
-                            Expr::literal(Value::Number(2.0)),
-                            Expr::variable(identifier("a")),
-                        ))
-                    ),
-                    Stmt::print(Expr::variable(identifier("a"))),
-                ]),
-            ]),
+            run(
+                "var a = 1;
+                {
+                    var a = a + 2;
+                    print a;
+                }"
+            ),
             b"3\n"
+        );
+
+        assert_eq!(
+            run(
+                "fun fact(a) {
+                    if (a <= 1)
+                        return 1;
+                    else
+                        return a * fact(a - 1);
+                }
+                print fact(20);"
+            ),
+            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n").as_bytes()
         );
     }
 }
