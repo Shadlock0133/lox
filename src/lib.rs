@@ -18,7 +18,7 @@ use tokens::*;
 use anyhow::Result;
 
 pub struct Lox {
-    interpreter: Interpreter,
+    interpreter: Interpreter<'static>,
 }
 
 impl Lox {

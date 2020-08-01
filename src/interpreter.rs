@@ -7,15 +7,15 @@ use crate::{
 };
 use std::{io::Write, time::Instant};
 
-pub struct Interpreter {
+pub struct Interpreter<'a> {
     start_time: Instant,
-    output: Box<dyn Write>,
+    output: Box<dyn Write + 'a>,
     pub global: Environment,
     current: Environment,
 }
 
-impl Interpreter {
-    pub fn new<W: Write + 'static>(output: W) -> Self {
+impl<'a> Interpreter<'a> {
+    pub fn new<W: Write + 'a>(output: W) -> Self {
         let mut global = Environment::new();
 
         global.define(
