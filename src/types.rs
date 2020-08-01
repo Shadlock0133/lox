@@ -18,7 +18,9 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn fun<F: Fn(&mut Interpreter, &mut [Value]) -> Value + Send + Sync + 'static>(
+    pub fn fun<
+        F: Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError> + Send + Sync + 'static,
+    >(
         arity: usize,
         f: F,
     ) -> Self {
@@ -88,7 +90,9 @@ impl Value {
 #[derive(Clone)]
 pub enum Fun {
     Foreign {
-        inner: Arc<dyn (Fn(&mut Interpreter, &mut [Value]) -> Value) + Send + Sync>,
+        inner: Arc<
+            dyn (Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError>) + Send + Sync,
+        >,
         arity: usize,
     },
     Native {
@@ -106,7 +110,7 @@ impl Fun {
         arguments: &mut [Value],
     ) -> Result<Value, RuntimeError> {
         match self {
-            Self::Foreign { inner, .. } => Ok((inner)(interpreter, arguments)),
+            Self::Foreign { inner, .. } => (inner)(interpreter, arguments),
             Self::Native {
                 params,
                 body,

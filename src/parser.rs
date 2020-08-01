@@ -153,7 +153,7 @@ impl Parser {
         } else if self.match_(&[While]) {
             self.while_statement()
         } else if self.match_(&[LeftBrace]) {
-            Ok(Stmt::block(self.block()?))
+            self.block().map(Stmt::block)
         } else {
             self.expression_statement()
         }
