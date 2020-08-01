@@ -211,9 +211,14 @@ impl<'a> Interpreter<'a> {
             }
 
             Stmt::While {
-                condition: _,
-                body: _,
-            } => todo!("visit_stmt"),
+                condition,
+                body,
+            } => {
+                while self.visit_expr(condition)?.is_truthy() {
+                    self.visit_stmt(body)?;
+                }
+                Ok(())
+            },
         }
     }
 }
