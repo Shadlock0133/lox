@@ -225,7 +225,7 @@ impl<'a> Interpreter<'a> {
                     .map_err(|e| RuntimeError::new(None, e.to_string()))
             }
 
-            Stmt::Return { keyword, value } => Err(RuntimeError::Return(
+            Stmt::Return { keyword: _, value } => Err(RuntimeError::Return(
                 value
                     .as_mut()
                     .map(|e| self.visit_expr(e))
@@ -257,63 +257,27 @@ impl<'a> Interpreter<'a> {
 mod tests {
     use super::*;
 
-    fn from_type(t: TokenType) -> Token {
-        Token {
-            type_: t,
-            lexeme: "".into(),
-            literal: None,
-            line: 0,
-        }
-    }
-
     #[test]
-    fn exprs() {
-        let expr = |mut x| Interpreter::new(vec![]).visit_expr(&mut x).unwrap();
-
-        assert_eq!(
-            expr(Expr::binary(
-                from_type(TokenType::Plus),
-                Expr::literal(Value::Number(1.0)),
-                Expr::literal(Value::Number(2.0))
-            )),
-            Value::Number(3.0)
-        );
-        assert_eq!(
-            expr(Expr::binary(
-                from_type(TokenType::Plus),
-                Expr::literal(Value::String("foo".into())),
-                Expr::literal(Value::String("bar".into()))
-            )),
-            Value::String("foobar".into())
-        );
-    }
-
-    #[test]
-    fn print() {
+    fn test() {
         let run = |x: &str| {
-            let mut v = vec![];
+            let mut output = vec![];
             let tokens = crate::tokenizer::Tokenizer::new(x.to_string())
                 .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
             let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
-            Interpreter::new(&mut v).interpret(&mut ast).unwrap();
-            v
+            Interpreter::new(&mut output).interpret(&mut ast).unwrap();
+            String::from_utf8(output).unwrap()
         };
 
-        assert_eq!(run("print \"one\";"), b"one\n");
-
-        assert_eq!(run("print true;"), b"true\n");
-
-        assert_eq!(run("print 1 + 2;"), b"3\n");
-
-        assert_eq!(run("var a = 1; print a;"), b"1\n");
-
-        assert_eq!(run("var a = 1; print a = 2;"), b"2\n");
+        assert_eq!(run("print \"one\";"), "one\n");
+        assert_eq!(run("print true;"), "true\n");
+        assert_eq!(run("print 1 + 2;"), "3\n");
+        assert_eq!(run("var a = 1; print a;"), "1\n");
+        assert_eq!(run("var a = 1; print a = 2;"), "2\n");
 
         assert_eq!(
-            run(
-                "var a = 1;
+            run("var a = 1;
                 var b = 1;
                 print a;
                 print b;
@@ -324,33 +288,45 @@ mod tests {
                     print b;
                 }
                 print a;
-                print b;"
-            ),
-            b"1\n1\n2\n2\n1\n2\n"
+                print b;"),
+            "1\n1\n2\n2\n1\n2\n"
         );
 
         assert_eq!(
-            run(
-                "var a = 1;
+            run("var a = 1;
                 {
                     var a = a + 2;
                     print a;
-                }"
-            ),
-            b"3\n"
+                }"),
+            "3\n"
         );
 
         assert_eq!(
-            run(
-                "fun fact(a) {
+            run("fun fact(a) {
                     if (a <= 1)
                         return 1;
                     else
                         return a * fact(a - 1);
                 }
-                print fact(20);"
-            ),
-            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n").as_bytes()
+                print fact(20);"),
+            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n")
         );
+
+        assert_eq!(
+            run("var a = 1;
+                {
+                    fun print_a() {
+                        print a;
+                    }
+                    print_a(); // 1
+
+                    a = 2;
+                    print_a(); // 2
+
+                    var a = 3;
+                    print_a(); // 2, not 3
+                }"),
+            "1\n2\n2\n"
+        )
     }
 }
