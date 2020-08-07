@@ -35,16 +35,21 @@ impl Lox {
     }
 
     pub fn run_repl(&mut self) -> Result<()> {
-        // use std::io::Write;
-
         let mut rl = rustyline::Editor::<()>::new();
-        // let mut out = std::io::stdout();
+        let mut out = std::io::stdout();
         loop {
-            // // FIXME: Workaround until rustyline supports mingw
-            // write!(out, "> ")?;
-            // out.flush()?;
+            // FIXME: Workaround until rustyline supports mingw
+            let rl_prompt = if cfg!(all(target_family = "windows", target_env = "gnu")) {
+                use std::io::Write;
 
-            match rl.readline("> ") {
+                write!(out, "> ")?;
+                out.flush()?;
+                ""
+            } else {
+                "> "
+            };
+
+            match rl.readline(rl_prompt) {
                 Ok(input) => {
                     rl.add_history_entry(&input);
                     let res = self.run(input);
