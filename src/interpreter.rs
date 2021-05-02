@@ -28,7 +28,9 @@ impl<'a> Interpreter<'a> {
 
         global.define(
             "panic".into(),
-            Value::fun(0, |_, _| Err(RuntimeError::new(None, "explicit panic"))),
+            Value::fun(0, |_, _| {
+                Err(RuntimeError::new(None, "explicit panic"))
+            }),
         );
 
         let current = global.clone();
@@ -88,7 +90,10 @@ impl<'a> Interpreter<'a> {
                 ) -> RuntimeResult<Value> {
                     match (l, r) {
                         (Value::Number(l), Value::Number(r)) => Ok(f(l, r)),
-                        _ => Err(RuntimeError::new(Some(op), "Operands must be a numbers.")),
+                        _ => Err(RuntimeError::new(
+                            Some(op),
+                            "Operands must be a numbers.",
+                        )),
                     }
                 }
 
@@ -96,9 +101,13 @@ impl<'a> Interpreter<'a> {
 
                 match op.type_ {
                     TokenType::Or if left.is_truthy() => return Ok(left),
-                    TokenType::Or if !left.is_truthy() => return self.visit_expr(&mut *right),
+                    TokenType::Or if !left.is_truthy() => {
+                        return self.visit_expr(&mut *right)
+                    }
                     TokenType::And if !left.is_truthy() => return Ok(left),
-                    TokenType::And if left.is_truthy() => return self.visit_expr(&mut *right),
+                    TokenType::And if left.is_truthy() => {
+                        return self.visit_expr(&mut *right)
+                    }
                     _ => (),
                 }
 
@@ -172,7 +181,10 @@ impl<'a> Interpreter<'a> {
                 Ok(match op.type_ {
                     TokenType::Minus => {
                         let value = value.as_number().ok_or_else(|| {
-                            RuntimeError::new(Some(op), "Operand must be a number.")
+                            RuntimeError::new(
+                                Some(op),
+                                "Operand must be a number.",
+                            )
                         })?;
                         Value::Number(-value)
                     }
@@ -190,7 +202,9 @@ impl<'a> Interpreter<'a> {
 
     fn visit_stmt(&mut self, stmt: &mut Stmt) -> RuntimeResult<()> {
         match stmt {
-            Stmt::Block { statements } => self.execute_block(statements, self.current.enclose()),
+            Stmt::Block { statements } => {
+                self.execute_block(statements, self.current.enclose())
+            }
 
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
@@ -261,7 +275,7 @@ mod tests {
     fn test() {
         let run = |x: &str| {
             let mut output = vec![];
-            let tokens = crate::tokenizer::Tokenizer::new(x.to_string())
+            let tokens = crate::tokenizer::Tokenizer::new(x)
                 .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use crate::types::Value;
 
@@ -53,8 +53,7 @@ pub enum TokenType {
     Eof,
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,

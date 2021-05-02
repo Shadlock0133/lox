@@ -5,7 +5,8 @@ use std::{
 };
 
 use crate::{
-    environment::Environment, errors::RuntimeError, interpreter::Interpreter, tokens::Token,
+    environment::Environment, errors::RuntimeError, interpreter::Interpreter,
+    tokens::Token,
 };
 
 #[derive(Debug, Clone)]
@@ -19,7 +20,10 @@ pub enum Value {
 
 impl Value {
     pub fn fun<
-        F: Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError> + Send + Sync + 'static,
+        F: Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError>
+            + Send
+            + Sync
+            + 'static,
     >(
         arity: usize,
         f: F,
@@ -35,7 +39,9 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Nil, Self::Nil) => true,
-            (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => true,
+            (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => {
+                true
+            }
             (Self::Number(l), Self::Number(r)) => l == r,
             (Self::String(l), Self::String(r)) => l == r,
             (Self::Bool(l), Self::Bool(r)) => l == r,
@@ -91,7 +97,12 @@ impl Value {
 pub enum Fun {
     Foreign {
         inner: Arc<
-            dyn (Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError>) + Send + Sync,
+            dyn (Fn(
+                    &mut Interpreter,
+                    &mut [Value],
+                ) -> Result<Value, RuntimeError>)
+                + Send
+                + Sync,
         >,
         arity: usize,
     },
@@ -119,7 +130,7 @@ impl Fun {
             } => {
                 let mut environment = closure.enclose();
                 for (param, arg) in params.iter().zip(arguments.iter()) {
-                    environment.define(param.lexeme.clone(), arg.clone());
+                    environment.define(param.lexeme.to_string(), arg.clone());
                 }
                 let result = interpreter.execute_block(body, environment);
                 match result {

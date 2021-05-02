@@ -1,9 +1,9 @@
+pub mod ast;
 pub mod environment;
 pub mod errors;
 pub mod interpreter;
 pub mod parser;
-// pub mod resolver;
-pub mod ast;
+pub mod resolver;
 pub mod tokenizer;
 pub mod tokens;
 pub mod types;
@@ -53,14 +53,16 @@ impl Lox {
                     }
                 }
                 Err(rustyline::error::ReadlineError::Eof)
-                | Err(rustyline::error::ReadlineError::Interrupted) => return Ok(()),
+                | Err(rustyline::error::ReadlineError::Interrupted) => {
+                    return Ok(())
+                }
                 Err(e) => return Err(e.into()),
             }
         }
     }
 
     fn run(&mut self, source: String) -> Result<()> {
-        let tokenizer = Tokenizer::new(source);
+        let tokenizer = Tokenizer::new(&source);
         let tokens: Vec<Token> = tokenizer
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
             .collect::<std::result::Result<_, errors::TokenizerError>>()?;

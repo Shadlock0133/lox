@@ -68,7 +68,11 @@ impl Environment {
         self.write().values.insert(name, value);
     }
 
-    pub fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
+    pub fn assign(
+        &mut self,
+        name: &Token,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
         let mut write = self.write();
         if let Some(v) = write.values.get_mut(&name.lexeme) {
             *v = value;

@@ -55,7 +55,11 @@ impl Parser {
         false
     }
 
-    fn error<S: Into<std::string::String>>(&mut self, token: Token, message: S) -> ParseError {
+    fn error<S: Into<std::string::String>>(
+        &mut self,
+        token: Token,
+        message: S,
+    ) -> ParseError {
         ParseError::new(Some(token), message.into())
     }
 
@@ -108,16 +112,21 @@ impl Parser {
     }
 
     fn function(&mut self, kind: &str) -> ParseResult<Stmt> {
-        let name = self.consume(Identifier, format!("Expect {} name.", kind))?;
+        let name =
+            self.consume(Identifier, format!("Expect {} name.", kind))?;
         self.consume(LeftParen, format!("Expect '(' after {} name.", kind))?;
 
         let mut params = Vec::new();
         if !self.check(RightParen) {
             loop {
                 if params.len() >= 255 {
-                    self.error(self.peek(), "Cannot have more than 255 parameters.");
+                    self.error(
+                        self.peek(),
+                        "Cannot have more than 255 parameters.",
+                    );
                 }
-                params.push(self.consume(Identifier, "Expect parameter name.")?);
+                params
+                    .push(self.consume(Identifier, "Expect parameter name.")?);
                 if !self.match_(&[Comma]) {
                     break;
                 }
@@ -383,7 +392,10 @@ impl Parser {
         if !self.check(RightParen) {
             loop {
                 if arguments.len() >= 255 {
-                    self.error(self.peek(), "Cannot have more than 255 arguments");
+                    self.error(
+                        self.peek(),
+                        "Cannot have more than 255 arguments",
+                    );
                 }
                 arguments.push(self.expression()?);
                 if !self.match_(&[Comma]) {
@@ -392,7 +404,8 @@ impl Parser {
             }
         }
 
-        let right_paren = self.consume(RightParen, "Expect ')' after arguments")?;
+        let right_paren =
+            self.consume(RightParen, "Expect ')' after arguments")?;
 
         Ok(Expr::call(callee, right_paren, arguments))
     }
@@ -431,7 +444,9 @@ mod tests {
         let expr = |x: &str| {
             Parser::new(
                 Tokenizer::new(x.into())
-                    .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+                    .filter(|t| {
+                        t.as_ref().map(|t| !t.can_skip()).unwrap_or(true)
+                    })
                     .collect::<Result<Vec<_>, _>>()
                     .unwrap(),
             )
@@ -445,8 +460,17 @@ mod tests {
             };
         }
 
-        test_expr!("1 + 2;", Stmt::Expression {
-            expr: Expr::Binary { op: Token { type_: TokenType::Plus, .. },  .. }
-        });
+        test_expr!(
+            "1 + 2;",
+            Stmt::Expression {
+                expr: Expr::Binary {
+                    op: Token {
+                        type_: TokenType::Plus,
+                        ..
+                    },
+                    ..
+                }
+            }
+        );
     }
 }

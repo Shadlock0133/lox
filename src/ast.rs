@@ -1,6 +1,6 @@
 use crate::{tokens::Token, types::Value};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Expr {
     Assign {
         name: Token,
@@ -47,7 +47,11 @@ impl Expr {
         }
     }
 
-    pub fn call(callee: Expr, right_paren: Token, arguments: Vec<Expr>) -> Self {
+    pub fn call(
+        callee: Expr,
+        right_paren: Token,
+        arguments: Vec<Expr>,
+    ) -> Self {
         Self::Call {
             callee: Box::new(callee),
             right_paren,
@@ -125,7 +129,11 @@ impl Stmt {
         Self::Function { name, params, body }
     }
 
-    pub fn if_(condition: Expr, then_branch: Stmt, else_branch: Option<Stmt>) -> Self {
+    pub fn if_(
+        condition: Expr,
+        then_branch: Stmt,
+        else_branch: Option<Stmt>,
+    ) -> Self {
         Self::If {
             condition,
             then_branch: Box::new(then_branch),

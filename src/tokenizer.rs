@@ -1,15 +1,15 @@
 use crate::{errors::TokenizerError, tokens::*, types::Value};
 
-pub struct Tokenizer {
-    source: String,
+pub struct Tokenizer<'a> {
+    source: &'a str,
     start: usize,
     current: usize,
     line: u32,
     had_eof: bool,
 }
 
-impl Tokenizer {
-    pub fn new(source: String) -> Self {
+impl<'a> Tokenizer<'a> {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source,
             start: 0,
@@ -53,7 +53,7 @@ impl Tokenizer {
     }
 
     // TODO: Add quote escaping for fun and profit
-    fn string(&mut self) -> Option<String> {
+    fn string(&mut self) -> Option<&str> {
         loop {
             // while self.peek() != '"' && !self.is_at_end() {
             if self.peek() != '\\' && self.peek_next() == '"' {
@@ -74,7 +74,7 @@ impl Tokenizer {
         }
 
         self.advance();
-        Some(self.source[(self.start + 1)..(self.current - 1)].to_owned())
+        Some(&self.source[(self.start + 1)..(self.current - 1)])
     }
 
     fn number(&mut self) -> f64 {
@@ -126,7 +126,7 @@ impl Tokenizer {
     }
 
     fn new_token(&self, type_: TokenType, literal: Option<Value>) -> Token {
-        let lexeme = self.source[self.start..self.current].to_owned();
+        let lexeme = self.source[self.start..self.current].into();
         Token {
             type_,
             literal,
@@ -193,7 +193,10 @@ impl Tokenizer {
                 Ok(self.from_type(Whitespace))
             }
             '"' => {
-                let string = self.string().ok_or(TokenizerError::UnterminatedString)?;
+                let string = self
+                    .string()
+                    .ok_or(TokenizerError::UnterminatedString)?
+                    .to_owned();
                 Ok(self.new_token(String, Some(Value::String(string))))
             }
             c if c.is_ascii_digit() => {
@@ -201,7 +204,8 @@ impl Tokenizer {
                 Ok(self.new_token(Number, Some(Value::Number(number))))
             }
             c if c.is_ascii_alphabetic() => {
-                while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+                while self.peek().is_ascii_alphanumeric() || self.peek() == '_'
+                {
                     self.advance();
                 }
                 let keyword = self
@@ -214,7 +218,7 @@ impl Tokenizer {
     }
 }
 
-impl Iterator for Tokenizer {
+impl<'a> Iterator for Tokenizer<'a> {
     type Item = Result<Token, TokenizerError>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.had_eof {
