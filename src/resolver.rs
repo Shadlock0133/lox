@@ -6,9 +6,17 @@ use crate::{
     tokens::Token,
 };
 
+#[derive(Clone, Copy, Debug)]
+enum FunctionType {
+    None,
+    Function,
+}
+
+#[derive(Debug)]
 pub struct Resolver<'a> {
     locals: &'a mut HashMap<Expr, usize>,
     scopes: Vec<HashMap<String, bool>>,
+    current_function_type: FunctionType,
 }
 
 impl<'a> Resolver<'a> {
@@ -16,6 +24,7 @@ impl<'a> Resolver<'a> {
         Self {
             locals,
             scopes: vec![],
+            current_function_type: FunctionType::None,
         }
     }
 
@@ -47,7 +56,10 @@ impl<'a> Resolver<'a> {
         &mut self,
         params: &[Token],
         body: &[Stmt],
+        typ: FunctionType,
     ) -> ResolveResult<()> {
+        let enclosing = std::mem::replace(&mut self.current_function_type, typ);
+
         self.begin_scope();
         for param in params {
             self.declare(param)?;
@@ -55,6 +67,9 @@ impl<'a> Resolver<'a> {
         }
         self.resolve(body)?;
         self.end_scope();
+
+        self.current_function_type = enclosing;
+
         Ok(())
     }
 
@@ -109,7 +124,7 @@ impl<'a> Resolver<'a> {
             Stmt::Function { name, params, body } => {
                 self.declare(name)?;
                 self.define(name)?;
-                self.resolve_function(params, body)?;
+                self.resolve_function(params, body, FunctionType::Function)?;
             }
             Stmt::If {
                 condition,
@@ -123,7 +138,13 @@ impl<'a> Resolver<'a> {
                 }
             }
             Stmt::PrintStmt { expr } => self.visit_expr(expr)?,
-            Stmt::Return { value, .. } => {
+            Stmt::Return { keyword, value } => {
+                if matches!(self.current_function_type, FunctionType::None) {
+                    return Err(ResolveError::new(
+                        Some(keyword.clone()),
+                        "Can't return from top-level code",
+                    ));
+                }
                 if let Some(value) = value {
                     self.visit_expr(value)?;
                 }
