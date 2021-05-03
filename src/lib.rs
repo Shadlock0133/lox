@@ -40,15 +40,16 @@ impl Lox {
         let mut out = std::io::stdout();
         loop {
             // FIXME: Workaround until rustyline supports mingw
-            let rl_prompt = if cfg!(all(target_family = "windows", target_env = "gnu")) {
-                use std::io::Write;
+            let rl_prompt =
+                if cfg!(all(target_family = "windows", target_env = "gnu")) {
+                    use std::io::Write;
 
-                write!(out, "> ")?;
-                out.flush()?;
-                ""
-            } else {
-                "> "
-            };
+                    write!(out, "> ")?;
+                    out.flush()?;
+                    ""
+                } else {
+                    "> "
+                };
 
             match rl.readline(rl_prompt) {
                 Ok(input) => {

@@ -19,7 +19,7 @@ impl GenericError {
                     token.line, kind, lexeme, self.1
                 )
             }
-            None => format!("{}Error {}", kind, self.1),
+            None => format!("{}Error: {}", kind, self.1),
         }
     }
 }

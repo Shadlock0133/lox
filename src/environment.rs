@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt,
     hash::{Hash, Hasher},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
@@ -10,9 +11,19 @@ use crate::{
     types::Value,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Environment {
     inner: Arc<RwLock<Inner>>,
+}
+
+impl fmt::Debug for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let inner = self.inner.read().unwrap();
+        f.debug_struct("Environment")
+            .field("enclosing", &inner.enclosing)
+            .field("values", &inner.values)
+            .finish()
+    }
 }
 
 impl Hash for Environment {
@@ -21,7 +32,7 @@ impl Hash for Environment {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 struct Inner {
     enclosing: Option<Environment>,
     values: HashMap<String, Value>,
@@ -111,12 +122,17 @@ impl Environment {
     ) -> RuntimeResult<Value> {
         self.ancestor(distance)
             .ok_or_else(|| {
-                RuntimeError::new(Some(name), "Non-existant env ancestor")
+                RuntimeError::new(Some(name), "Non-existent env ancestor")
             })?
             .read()
             .values
             .get(&name.lexeme)
-            .ok_or_else(|| RuntimeError::new(Some(name), "Missing variable"))
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    Some(name),
+                    format!("Missing variable at {} dist", distance),
+                )
+            })
             .map(|x| x.clone())
     }
 

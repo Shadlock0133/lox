@@ -43,7 +43,7 @@ impl<'a> Interpreter<'a> {
         global.define(
             "panic".into(),
             Value::fun(0, |_, _| {
-                Err(RuntimeError::new(None, "explicit panic"))
+                Err(RuntimeError::new(None, "Explicit panic"))
             }),
         );
 
@@ -237,7 +237,7 @@ impl<'a> Interpreter<'a> {
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
             Stmt::Function { name, params, body } => {
-                let closure = self.current.enclose();
+                let closure = self.current.clone();
                 let function = Value::Fun(crate::types::Fun::Native {
                     name: Box::new(name.clone()),
                     body: body.clone(),
