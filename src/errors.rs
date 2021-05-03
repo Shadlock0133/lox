@@ -15,8 +15,8 @@ impl GenericError {
                     _ => &token.lexeme,
                 };
                 format!(
-                    "[line {}] {}Error at {}: {}",
-                    token.line, kind, lexeme, self.1
+                    "[line {}:{}] {}Error at {}: {}",
+                    token.pos.0, token.pos.1, kind, lexeme, self.1
                 )
             }
             None => format!("{}Error: {}", kind, self.1),

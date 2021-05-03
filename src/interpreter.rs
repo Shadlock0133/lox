@@ -409,7 +409,7 @@ mod tests {
                 }"
             )
             .to_string(),
-            "[line 3] Resolve Error at a: Variable already exists"
+            "[line 3:25] Resolve Error at a: Variable already exists"
         );
 
         assert_eq!(
@@ -421,7 +421,7 @@ mod tests {
                 }"
             )
             .to_string(),
-            "[line 3] Resolve Error at a: Can't read local variable in its own initializer"
+            "[line 3:29] Resolve Error at a: Can't read local variable in its own initializer"
         );
     }
 
@@ -436,7 +436,7 @@ mod tests {
                 print a;"
             )
             .to_string(),
-            "[line 5] Runtime Error at a: Undefined variable 'a'."
+            "[line 5:23] Runtime Error at a: Undefined variable 'a'."
         )
     }
 

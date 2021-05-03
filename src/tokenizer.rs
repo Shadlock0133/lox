@@ -4,7 +4,7 @@ pub struct Tokenizer<'a> {
     source: &'a str,
     start: usize,
     current: usize,
-    line: u32,
+    line_pos: (u32, u32),
     had_eof: bool,
 }
 
@@ -14,7 +14,7 @@ impl<'a> Tokenizer<'a> {
             source,
             start: 0,
             current: 0,
-            line: 1,
+            line_pos: (1, 0),
             had_eof: false,
         }
     }
@@ -26,6 +26,7 @@ impl<'a> Tokenizer<'a> {
             .and_then(|x| x.chars().next())
             .unwrap_or('\0');
         self.current += char.len_utf8();
+        self.line_pos.1 += 1;
         char
     }
 
@@ -64,7 +65,8 @@ impl<'a> Tokenizer<'a> {
                 break;
             }
             if self.peek() == '\n' {
-                self.line += 1;
+                self.line_pos.0 += 1;
+                self.line_pos.1 = 0;
             }
             self.advance();
         }
@@ -131,7 +133,7 @@ impl<'a> Tokenizer<'a> {
             type_,
             literal,
             lexeme,
-            line: self.line,
+            pos: self.line_pos,
         }
     }
 
@@ -189,7 +191,8 @@ impl<'a> Tokenizer<'a> {
             }
             ' ' | '\r' | '\t' => Ok(self.from_type(Whitespace)),
             '\n' => {
-                self.line += 1;
+                self.line_pos.0 += 1;
+                self.line_pos.1 = 0;
                 Ok(self.from_type(Whitespace))
             }
             '"' => {
