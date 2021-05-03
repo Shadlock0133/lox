@@ -426,6 +426,21 @@ mod tests {
     }
 
     #[test]
+    fn closure_error() {
+        assert_eq!(
+            interpreter_error(
+                "fun foo() {
+                    var a = 1;
+                }
+                foo();
+                print a;"
+            )
+            .to_string(),
+            "[line 5] Runtime Error at a: Undefined variable 'a'."
+        )
+    }
+
+    #[test]
     fn factorial() {
         assert_eq!(
             run("fun fact(a) {
