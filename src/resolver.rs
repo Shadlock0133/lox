@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
     ast::*,
@@ -6,12 +6,19 @@ use crate::{
     tokens::Token,
 };
 
-pub struct Resolver {
-    locals: HashMap<Expr, usize>,
+pub struct Resolver<'a> {
+    locals: &'a mut HashMap<Expr, usize>,
     scopes: Vec<HashMap<String, bool>>,
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
+    pub fn new(locals: &'a mut HashMap<Expr, usize>) -> Self {
+        Self {
+            locals,
+            scopes: vec![],
+        }
+    }
+
     fn begin_scope(&mut self) {
         self.scopes.push(HashMap::new());
     }
@@ -20,10 +27,11 @@ impl Resolver {
         self.scopes.pop();
     }
 
-    fn resolve(&mut self, statements: &mut [Stmt]) {
+    pub fn resolve(&mut self, statements: &[Stmt]) -> ResolveResult<()> {
         for stmt in statements {
-            self.visit_stmt(stmt);
+            self.visit_stmt(stmt)?;
         }
+        Ok(())
     }
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
@@ -35,39 +43,143 @@ impl Resolver {
         }
     }
 
-    fn declare(&mut self, name: &Token) {
-        self.scopes
-            .last_mut()
-            .map(|scope| scope.insert(name.lexeme.to_string(), false));
+    fn resolve_function(
+        &mut self,
+        params: &[Token],
+        body: &[Stmt],
+    ) -> ResolveResult<()> {
+        self.begin_scope();
+        for param in params {
+            self.declare(param)?;
+            self.define(param)?;
+        }
+        self.resolve(body)?;
+        self.end_scope();
+        Ok(())
     }
 
-    fn define(&mut self, name: &Token) {
-        self.scopes
-            .last_mut()
-            .map(|scope| scope.insert(name.lexeme.to_string(), true));
+    fn declare(&mut self, name: &Token) -> ResolveResult<()> {
+        if let Some(scope) = self.scopes.last_mut() {
+            match scope.entry(name.lexeme.clone()) {
+                Entry::Occupied(_) => {
+                    return Err(ResolveError::new(
+                        Some(name.clone()),
+                        "Variable already exists",
+                    ))
+                }
+                Entry::Vacant(vacant) => {
+                    vacant.insert(false);
+                }
+            }
+        }
+        Ok(())
     }
 
-    fn visit_stmt(&mut self, stmt: &mut Stmt) {
+    fn define(&mut self, name: &Token) -> ResolveResult<()> {
+        if let Some(scope) = self.scopes.last_mut() {
+            match scope.entry(name.lexeme.clone()) {
+                Entry::Occupied(mut occupied) => {
+                    if *occupied.get() == true {
+                        return Err(ResolveError::new(
+                            Some(name.clone()),
+                            "Double define",
+                        ));
+                    }
+                    occupied.insert(true);
+                }
+                Entry::Vacant(_) => {
+                    return Err(ResolveError::new(
+                        Some(name.clone()),
+                        "Defining undeclared variable",
+                    ))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn visit_stmt(&mut self, stmt: &Stmt) -> ResolveResult<()> {
         match stmt {
             Stmt::Block { statements } => {
                 self.begin_scope();
-                self.resolve(statements);
+                self.resolve(statements)?;
                 self.end_scope();
             }
-            Stmt::Var { name, init } => {
-                self.declare(name);
-                if let Some(init) = init {
-                    self.visit_expr(init);
-                }
-                self.define(name);
+            Stmt::Expression { expr } => self.visit_expr(expr)?,
+            Stmt::Function { name, params, body } => {
+                self.declare(name)?;
+                self.define(name)?;
+                self.resolve_function(params, body)?;
             }
-            _ => todo!(),
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.visit_expr(condition)?;
+                self.visit_stmt(then_branch)?;
+                if let Some(else_branch) = else_branch {
+                    self.visit_stmt(else_branch)?;
+                }
+            }
+            Stmt::PrintStmt { expr } => self.visit_expr(expr)?,
+            Stmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    self.visit_expr(value)?;
+                }
+            }
+            Stmt::While { condition, body } => {
+                self.visit_expr(condition)?;
+                self.visit_stmt(body)?;
+            }
+            Stmt::Var { name, init } => {
+                self.declare(name)?;
+                if let Some(init) = init {
+                    self.visit_expr(init)?;
+                }
+                self.define(name)?;
+            }
         }
+        Ok(())
     }
 
-    fn visit_expr(&mut self, expr: &mut Expr) {
+    fn visit_expr(&mut self, expr: &Expr) -> ResolveResult<()> {
         match expr {
-            _ => todo!(),
+            Expr::Assign { name, value } => {
+                self.visit_expr(value)?;
+                self.resolve_local(expr, name);
+            }
+            Expr::Binary { left, right, .. } => {
+                self.visit_expr(left)?;
+                self.visit_expr(right)?;
+            }
+            Expr::Call {
+                callee, arguments, ..
+            } => {
+                self.visit_expr(callee)?;
+                for argument in arguments {
+                    self.visit_expr(argument)?;
+                }
+            }
+            Expr::Grouping { expr } => self.visit_expr(expr)?,
+            Expr::Literal { .. } => {}
+            Expr::Unary { right, .. } => self.visit_expr(right)?,
+            Expr::Variable { name } => {
+                if self
+                    .scopes
+                    .last()
+                    .and_then(|x| x.get(&name.lexeme))
+                    .map(|x| !*x)
+                    .unwrap_or(false)
+                {
+                    return Err(ResolveError::new(
+                        Some(name.clone()),
+                        "Can't read local variable in its own initializer",
+                    ));
+                }
+                self.resolve_local(expr, name);
+            }
         }
+        Ok(())
     }
 }

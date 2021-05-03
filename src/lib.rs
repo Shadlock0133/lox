@@ -12,6 +12,7 @@ use std::{fs, path::Path};
 
 use interpreter::*;
 use parser::*;
+use resolver::Resolver;
 use tokenizer::*;
 use tokens::*;
 
@@ -66,8 +67,13 @@ impl Lox {
         let tokens: Vec<Token> = tokenizer
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
             .collect::<std::result::Result<_, errors::TokenizerError>>()?;
+
         let mut parser = Parser::new(tokens);
         let mut program = parser.parse()?;
+
+        let mut resolver = Resolver::new(&mut self.interpreter.locals);
+        resolver.resolve(&mut program)?;
+
         self.interpreter.interpret(&mut program)?;
 
         Ok(())

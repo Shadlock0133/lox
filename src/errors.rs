@@ -62,7 +62,14 @@ impl ParseError {
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-#[derive(Debug)]
-pub struct ResolveError;
+#[derive(Debug, thiserror::Error)]
+#[error("{}", self.0.to_string("Resolve "))]
+pub struct ResolveError(pub GenericError);
+
+impl ResolveError {
+    pub fn new(token: Option<Token>, msg: impl Into<String>) -> Self {
+        Self(GenericError(token, msg.into()))
+    }
+}
 
 pub type ResolveResult<T> = Result<T, ResolveError>;

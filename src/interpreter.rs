@@ -5,13 +5,27 @@ use crate::{
     tokens::{Token, TokenType},
     types::Value,
 };
-use std::{io::Write, time::Instant};
+use core::fmt;
+use std::{collections::HashMap, io::Write, time::Instant};
 
 pub struct Interpreter<'a> {
     start_time: Instant,
     output: Box<dyn Write + 'a>,
     pub global: Environment,
     current: Environment,
+    pub locals: HashMap<Expr, usize>,
+}
+
+impl fmt::Debug for Interpreter<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Interpreter")
+            .field("start_time", &self.start_time)
+            .field("output", &"Box<dyn Write>")
+            .field("global", &self.global)
+            .field("current", &self.current)
+            .field("locals", &self.locals)
+            .finish()
+    }
 }
 
 impl<'a> Interpreter<'a> {
@@ -39,6 +53,7 @@ impl<'a> Interpreter<'a> {
             output: Box::new(output),
             global,
             current,
+            locals: HashMap::new(),
         }
     }
 
@@ -71,6 +86,17 @@ impl<'a> Interpreter<'a> {
         })();
         self.current = previous;
         result
+    }
+
+    fn lookup_variable(
+        &self,
+        name: &Token,
+        expr: &Expr,
+    ) -> RuntimeResult<Value> {
+        match self.locals.get(expr) {
+            Some(&distance) => self.current.get_at(distance, name),
+            None => self.global.get(name),
+        }
     }
 
     fn visit_expr(&mut self, expr: &mut Expr) -> RuntimeResult<Value> {
@@ -196,7 +222,9 @@ impl<'a> Interpreter<'a> {
                 })
             }
 
-            Expr::Variable { name } => self.current.get(name),
+            Expr::Variable { name } => {
+                self.lookup_variable(&name.clone(), expr)
+            }
         }
     }
 
@@ -269,27 +297,74 @@ impl<'a> Interpreter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::errors::ResolveError;
+
     use super::*;
 
-    #[test]
-    fn test() {
-        let run = |x: &str| {
-            let mut output = vec![];
-            let tokens = crate::tokenizer::Tokenizer::new(x)
-                .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap();
-            let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
-            Interpreter::new(&mut output).interpret(&mut ast).unwrap();
-            String::from_utf8(output).unwrap()
-        };
+    #[track_caller]
+    fn run(x: &str) -> String {
+        let tokens = crate::tokenizer::Tokenizer::new(x)
+            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
 
+        let mut output = vec![];
+        let mut interpreter = Interpreter::new(&mut output);
+
+        crate::resolver::Resolver::new(&mut interpreter.locals)
+            .resolve(&mut ast)
+            .unwrap();
+
+        interpreter.interpret(&mut ast).unwrap();
+        drop(interpreter);
+        String::from_utf8(output).unwrap()
+    }
+
+    #[track_caller]
+    fn interpreter_error(x: &str) -> RuntimeError {
+        let tokens = crate::tokenizer::Tokenizer::new(x)
+            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+
+        let mut output = vec![];
+        let mut interpreter = Interpreter::new(&mut output);
+        crate::resolver::Resolver::new(&mut interpreter.locals)
+            .resolve(&mut ast)
+            .unwrap();
+
+        let error = interpreter.interpret(&mut ast).unwrap_err();
+        error
+    }
+
+    #[track_caller]
+    fn resolver_error(x: &str) -> ResolveError {
+        let tokens = crate::tokenizer::Tokenizer::new(x)
+            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+
+        let mut output = vec![];
+        let mut interpreter = Interpreter::new(&mut output);
+        crate::resolver::Resolver::new(&mut interpreter.locals)
+            .resolve(&mut ast)
+            .unwrap_err()
+    }
+
+    #[test]
+    fn simple() {
         assert_eq!(run("print \"one\";"), "one\n");
         assert_eq!(run("print true;"), "true\n");
         assert_eq!(run("print 1 + 2;"), "3\n");
         assert_eq!(run("var a = 1; print a;"), "1\n");
         assert_eq!(run("var a = 1; print a = 2;"), "2\n");
+    }
 
+    #[test]
+    fn scopes() {
         assert_eq!(
             run("var a = 1;
                 var b = 1;
@@ -309,26 +384,6 @@ mod tests {
         assert_eq!(
             run("var a = 1;
                 {
-                    var a = a + 2;
-                    print a;
-                }"),
-            "3\n"
-        );
-
-        assert_eq!(
-            run("fun fact(a) {
-                    if (a <= 1)
-                        return 1;
-                    else
-                        return a * fact(a - 1);
-                }
-                print fact(20);"),
-            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n")
-        );
-
-        assert_eq!(
-            run("var a = 1;
-                {
                     fun print_a() {
                         print a;
                     }
@@ -341,6 +396,46 @@ mod tests {
                     print_a(); // 2, not 3
                 }"),
             "1\n2\n2\n"
-        )
+        );
+    }
+
+    #[test]
+    fn scope_error() {
+        assert_eq!(
+            resolver_error(
+                "{
+                    var a = 1;
+                    var a = 2;
+                }"
+            )
+            .to_string(),
+            "[line 3] Resolve Error at a: Variable already exists"
+        );
+
+        assert_eq!(
+            resolver_error(
+                "var a = 1;
+                {
+                    var a = a + 2;
+                    print a;
+                }"
+            )
+            .to_string(),
+            "[line 3] Resolve Error at a: Can't read local variable in its own initializer"
+        );
+    }
+
+    #[test]
+    fn factorial() {
+        assert_eq!(
+            run("fun fact(a) {
+                    if (a <= 1)
+                        return 1;
+                    else
+                        return a * fact(a - 1);
+                }
+                print fact(20);"),
+            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n")
+        );
     }
 }

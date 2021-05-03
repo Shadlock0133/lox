@@ -4,9 +4,13 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use crate::{errors::RuntimeError, tokens::Token, types::Value};
+use crate::{
+    errors::{RuntimeError, RuntimeResult},
+    tokens::Token,
+    types::Value,
+};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Environment {
     inner: Arc<RwLock<Inner>>,
 }
@@ -17,7 +21,7 @@ impl Hash for Environment {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Inner {
     enclosing: Option<Environment>,
     values: HashMap<String, Value>,
@@ -87,7 +91,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
+    pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
         if let Some(value) = self.read().values.get(&name.lexeme) {
             Ok(value.clone())
         } else if let Some(en) = &self.read().enclosing {
@@ -98,5 +102,30 @@ impl Environment {
                 format!("Undefined variable '{}'.", name.lexeme),
             ))
         }
+    }
+
+    pub fn get_at(
+        &self,
+        distance: usize,
+        name: &Token,
+    ) -> RuntimeResult<Value> {
+        self.ancestor(distance)
+            .ok_or_else(|| {
+                RuntimeError::new(Some(name), "Non-existant env ancestor")
+            })?
+            .read()
+            .values
+            .get(&name.lexeme)
+            .ok_or_else(|| RuntimeError::new(Some(name), "Missing variable"))
+            .map(|x| x.clone())
+    }
+
+    fn ancestor(&self, distance: usize) -> Option<Environment> {
+        let mut env = self.clone();
+        for _ in 0..distance {
+            let environment = env.read().enclosing.as_ref()?.clone();
+            env = environment;
+        }
+        Some(env)
     }
 }
