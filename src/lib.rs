@@ -85,3 +85,66 @@ impl Lox {
         Ok(())
     }
 }
+
+pub fn run_tests(dir: impl AsRef<Path>) -> Result<()> {
+    let mut any_errors = false;
+    for file in fs::read_dir(dir)? {
+        let file = file?;
+        if file.file_type()?.is_file() {
+            eprint!("{}: ", file.path().display());
+            let res = run_test(file.path());
+            if res.is_err() {
+                any_errors = true;
+            }
+        }
+    }
+    if !any_errors {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("tests failed"))
+    }
+}
+
+pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
+    let source = fs::read_to_string(file)?;
+    let mut tokens: Vec<_> = Tokenizer::new(&source)
+        .collect::<std::result::Result<_, errors::TokenizerError>>()?;
+
+    // Extract expected output
+    let expected: String = tokens
+        .iter()
+        .filter_map(|t| {
+            if t.type_ != TokenType::Comment {
+                return None;
+            }
+            t.lexeme.trim().strip_prefix("// expect: ")
+        })
+        .zip(std::iter::repeat("\n"))
+        .flat_map(|(a, b)| std::array::IntoIter::new([a, b]))
+        .collect();
+
+    // Remove comments and whitespaces
+    tokens.retain(|x| !x.can_skip());
+
+    let mut parser = Parser::new(tokens);
+    let mut program = parser.parse()?;
+
+    let mut output = vec![];
+    let mut interpreter = Interpreter::new(&mut output);
+
+    let mut resolver = Resolver::new(&mut interpreter.locals);
+    resolver.resolve(&mut program)?;
+
+    interpreter.interpret(&mut program)?;
+
+    drop(interpreter);
+    let output = String::from_utf8(output)?;
+    if output == expected {
+        eprintln!("passed");
+        Ok(())
+    } else {
+        eprintln!("failed");
+        eprintln!("    expected {:?}, got {:?}", expected, output);
+        Err(anyhow::anyhow!("Test failed"))
+    }
+}

@@ -24,15 +24,13 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn fun<
+    pub fn fun<F>(arity: usize, f: F) -> Self
+    where
         F: Fn(&mut Interpreter, &mut [Value]) -> Result<Value, RuntimeError>
             + Send
             + Sync
             + 'static,
-    >(
-        arity: usize,
-        f: F,
-    ) -> Self {
+    {
         Value::Fun(Fun::Foreign {
             inner: Arc::new(f),
             arity,
@@ -43,6 +41,8 @@ impl Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::Class(l), Self::Class(r)) => l == r,
+            (Self::Instance(l), Self::Instance(r)) => Arc::ptr_eq(l, r),
             (Self::Nil, Self::Nil) => true,
             (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => {
                 true
@@ -180,7 +180,7 @@ impl Hash for Fun {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Class {
     name: String,
 }
@@ -197,7 +197,7 @@ impl fmt::Display for Class {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Instance {
     class: Class,
     fields: BTreeMap<String, Value>,
