@@ -1,16 +1,21 @@
 use std::{
+    collections::BTreeMap,
     fmt,
     hash::{Hash, Hasher},
     sync::Arc,
 };
 
 use crate::{
-    environment::Environment, errors::RuntimeError, interpreter::Interpreter,
+    environment::{Environment, MyRwLock},
+    errors::{RuntimeError, RuntimeResult},
+    interpreter::Interpreter,
     tokens::Token,
 };
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Class(Class),
+    Instance(Arc<MyRwLock<Instance>>),
     Fun(Fun),
     String(String),
     Number(f64),
@@ -55,11 +60,13 @@ impl Eq for Value {}
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Value::Fun(f) => f.hash(state),
-            Value::Number(n) => n.to_le_bytes().hash(state),
-            Value::String(s) => s.hash(state),
-            Value::Bool(b) => b.hash(state),
-            Value::Nil => ().hash(state),
+            Self::Class(c) => c.hash(state),
+            Self::Instance(i) => i.hash(state),
+            Self::Fun(f) => f.hash(state),
+            Self::Number(n) => n.to_le_bytes().hash(state),
+            Self::String(s) => s.hash(state),
+            Self::Bool(b) => b.hash(state),
+            Self::Nil => ().hash(state),
         }
     }
 }
@@ -67,6 +74,8 @@ impl Hash for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Class(c) => write!(f, "{}", c),
+            Self::Instance(i) => write!(f, "{}", i.read().unwrap()),
             Self::Fun(fun) => write!(f, "{:?}", fun),
             Self::String(s) => write!(f, "{}", s),
             Self::Number(n) => write!(f, "{}", n),
@@ -168,5 +177,56 @@ impl Hash for Fun {
             }
             Self::Native { .. } => (),
         }
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct Class {
+    name: String,
+}
+
+impl Class {
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+}
+
+impl fmt::Display for Class {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct Instance {
+    class: Class,
+    fields: BTreeMap<String, Value>,
+}
+
+impl Instance {
+    pub fn new(class: Class) -> Self {
+        Self {
+            class,
+            fields: BTreeMap::new(),
+        }
+    }
+
+    pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
+        self.fields.get(&name.lexeme).cloned().ok_or_else(|| {
+            RuntimeError::new(
+                Some(name),
+                format!("Undefined property {}", name.lexeme),
+            )
+        })
+    }
+
+    pub fn set(&mut self, name: &Token, value: Value) {
+        self.fields.insert(name.lexeme.clone(), value);
+    }
+}
+
+impl fmt::Display for Instance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} instance", self.class.name)
     }
 }

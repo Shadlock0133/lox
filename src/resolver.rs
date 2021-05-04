@@ -120,8 +120,12 @@ impl<'a> Resolver<'a> {
                 self.resolve(statements)?;
                 self.end_scope();
             }
+            Stmt::Class { name, .. } => {
+                self.declare(name)?;
+                self.define(name)?;
+            }
             Stmt::Expression { expr } => self.visit_expr(expr)?,
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(Function { name, params, body }) => {
                 self.declare(name)?;
                 self.define(name)?;
                 self.resolve_function(params, body, FunctionType::Function)?;
@@ -182,8 +186,13 @@ impl<'a> Resolver<'a> {
                     self.visit_expr(argument)?;
                 }
             }
+            Expr::Get { object, .. } => self.visit_expr(object)?,
             Expr::Grouping { expr } => self.visit_expr(expr)?,
             Expr::Literal { .. } => {}
+            Expr::Set { object, value, .. } => {
+                self.visit_expr(value)?;
+                self.visit_expr(object)?;
+            }
             Expr::Unary { right, .. } => self.visit_expr(right)?,
             Expr::Variable { name } => {
                 if self

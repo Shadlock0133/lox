@@ -1,8 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use crate::{
@@ -35,7 +35,7 @@ impl Hash for Environment {
 #[derive(Default)]
 struct Inner {
     enclosing: Option<Environment>,
-    values: HashMap<String, Value>,
+    values: BTreeMap<String, Value>,
 }
 
 impl Hash for Inner {
@@ -43,9 +43,30 @@ impl Hash for Inner {
         if let Some(en) = &self.enclosing {
             en.hash(state);
         }
-        let mut map = self.values.iter().collect::<Vec<_>>();
-        map.sort_by_key(|x| x.0);
-        map.hash(state);
+        self.values.hash(state);
+    }
+}
+
+#[derive(Debug)]
+pub struct MyRwLock<T>(RwLock<T>);
+
+impl<T> MyRwLock<T> {
+    pub fn new(value: T) -> Self {
+        Self(RwLock::new(value))
+    }
+
+    pub fn read(&self) -> LockResult<RwLockReadGuard<T>> {
+        self.0.read()
+    }
+
+    pub fn write(&self) -> LockResult<RwLockWriteGuard<T>> {
+        self.0.write()
+    }
+}
+
+impl<T: Hash> Hash for MyRwLock<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.read().unwrap().hash(state);
     }
 }
 
@@ -133,7 +154,7 @@ impl Environment {
                     format!("Missing variable at {} dist", distance),
                 )
             })
-            .map(|x| x.clone())
+            .map(Clone::clone)
     }
 
     fn ancestor(&self, distance: usize) -> Option<Environment> {

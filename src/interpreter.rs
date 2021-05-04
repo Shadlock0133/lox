@@ -1,12 +1,12 @@
 use crate::{
     ast::*,
-    environment::Environment,
+    environment::{Environment, MyRwLock},
     errors::{RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
-    types::Value,
+    types::{Class, Instance, Value},
 };
 use core::fmt;
-use std::{collections::HashMap, io::Write, time::Instant};
+use std::{collections::HashMap, io::Write, sync::Arc, time::Instant};
 
 pub struct Interpreter<'a> {
     start_time: Instant,
@@ -191,6 +191,11 @@ impl<'a> Interpreter<'a> {
                             arguments.len()
                         ),
                     )),
+                    Value::Class(class) if arguments.len() == 0 => {
+                        Ok(Value::Instance(Arc::new(MyRwLock::new(
+                            Instance::new(class.clone()),
+                        ))))
+                    }
                     _ => Err(RuntimeError::new(
                         Some(right_paren),
                         "Can only call functions and classes",
@@ -198,9 +203,39 @@ impl<'a> Interpreter<'a> {
                 }
             }
 
+            Expr::Get { object, name } => {
+                let object = self.visit_expr(object)?;
+                if let Value::Instance(instance) = object {
+                    instance.read().unwrap().get(name)
+                } else {
+                    Err(RuntimeError::new(
+                        Some(name),
+                        "Only instances have properties",
+                    ))
+                }
+            }
+
             Expr::Grouping { expr } => self.visit_expr(expr),
 
             Expr::Literal { value } => Ok(value.clone()),
+
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                let object = self.visit_expr(object)?;
+                if let Value::Instance(instance) = object {
+                    let value = self.visit_expr(value)?;
+                    instance.write().unwrap().set(name, value.clone());
+                    Ok(value)
+                } else {
+                    Err(RuntimeError::new(
+                        Some(name),
+                        "Only instances have fields",
+                    ))
+                }
+            }
 
             Expr::Unary { op, right } => {
                 let value = self.visit_expr(&mut *right)?;
@@ -234,9 +269,17 @@ impl<'a> Interpreter<'a> {
                 self.execute_block(statements, self.current.enclose())
             }
 
+            Stmt::Class { name, .. } => {
+                self.current.define(name.lexeme.clone(), Value::Nil);
+                let class = Class::new(name.lexeme.clone());
+                self.current
+                    .define(name.lexeme.clone(), Value::Class(class));
+                Ok(())
+            }
+
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(Function { name, params, body }) => {
                 let closure = self.current.clone();
                 let function = Value::Fun(crate::types::Fun::Native {
                     name: Box::new(name.clone()),
@@ -296,161 +339,4 @@ impl<'a> Interpreter<'a> {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::errors::ResolveError;
-
-    use super::*;
-
-    #[track_caller]
-    fn run(x: &str) -> String {
-        let tokens = crate::tokenizer::Tokenizer::new(x)
-            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
-
-        let mut output = vec![];
-        let mut interpreter = Interpreter::new(&mut output);
-
-        crate::resolver::Resolver::new(&mut interpreter.locals)
-            .resolve(&mut ast)
-            .unwrap();
-
-        interpreter.interpret(&mut ast).unwrap();
-        drop(interpreter);
-        String::from_utf8(output).unwrap()
-    }
-
-    #[track_caller]
-    fn interpreter_error(x: &str) -> RuntimeError {
-        let tokens = crate::tokenizer::Tokenizer::new(x)
-            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
-
-        let mut output = vec![];
-        let mut interpreter = Interpreter::new(&mut output);
-        crate::resolver::Resolver::new(&mut interpreter.locals)
-            .resolve(&mut ast)
-            .unwrap();
-
-        let error = interpreter.interpret(&mut ast).unwrap_err();
-        error
-    }
-
-    #[track_caller]
-    fn resolver_error(x: &str) -> ResolveError {
-        let tokens = crate::tokenizer::Tokenizer::new(x)
-            .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
-
-        let mut output = vec![];
-        let mut interpreter = Interpreter::new(&mut output);
-        crate::resolver::Resolver::new(&mut interpreter.locals)
-            .resolve(&mut ast)
-            .unwrap_err()
-    }
-
-    #[test]
-    fn simple() {
-        assert_eq!(run("print \"one\";"), "one\n");
-        assert_eq!(run("print true;"), "true\n");
-        assert_eq!(run("print 1 + 2;"), "3\n");
-        assert_eq!(run("var a = 1; print a;"), "1\n");
-        assert_eq!(run("var a = 1; print a = 2;"), "2\n");
-    }
-
-    #[test]
-    fn scopes() {
-        assert_eq!(
-            run("var a = 1;
-                var b = 1;
-                print a;
-                print b;
-                {
-                    var a = 2;
-                    b = 2;
-                    print a;
-                    print b;
-                }
-                print a;
-                print b;"),
-            "1\n1\n2\n2\n1\n2\n"
-        );
-
-        assert_eq!(
-            run("var a = 1;
-                {
-                    fun print_a() {
-                        print a;
-                    }
-                    print_a(); // 1
-
-                    a = 2;
-                    print_a(); // 2
-
-                    var a = 3;
-                    print_a(); // 2, not 3
-                }"),
-            "1\n2\n2\n"
-        );
-    }
-
-    #[test]
-    fn scope_error() {
-        assert_eq!(
-            resolver_error(
-                "{
-                    var a = 1;
-                    var a = 2;
-                }"
-            )
-            .to_string(),
-            "[line 3:25] Resolve Error at a: Variable already exists"
-        );
-
-        assert_eq!(
-            resolver_error(
-                "var a = 1;
-                {
-                    var a = a + 2;
-                    print a;
-                }"
-            )
-            .to_string(),
-            "[line 3:29] Resolve Error at a: Can't read local variable in its own initializer"
-        );
-    }
-
-    #[test]
-    fn closure_error() {
-        assert_eq!(
-            interpreter_error(
-                "fun foo() {
-                    var a = 1;
-                }
-                foo();
-                print a;"
-            )
-            .to_string(),
-            "[line 5:23] Runtime Error at a: Undefined variable 'a'."
-        )
-    }
-
-    #[test]
-    fn factorial() {
-        assert_eq!(
-            run("fun fact(a) {
-                    if (a <= 1)
-                        return 1;
-                    else
-                        return a * fact(a - 1);
-                }
-                print fact(20);"),
-            ((1..=20).map(|x| x as f64).product::<f64>().to_string() + "\n")
-        );
-    }
-}
+mod tests;

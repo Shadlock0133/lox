@@ -97,8 +97,10 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> ParseResult<Stmt> {
-        let decl = if self.match_(&[Fun]) {
-            self.function("function")
+        let decl = if self.match_(&[Class]) {
+            self.class()
+        } else if self.match_(&[Fun]) {
+            self.function("function").map(Stmt::Function)
         } else if self.match_(&[Var]) {
             self.var_declaration()
         } else {
@@ -111,7 +113,20 @@ impl Parser {
         decl
     }
 
-    fn function(&mut self, kind: &str) -> ParseResult<Stmt> {
+    fn class(&mut self) -> ParseResult<Stmt> {
+        let name = self.consume(Identifier, "Expect class name")?;
+        self.consume(LeftBrace, "Expect '{' before class body")?;
+
+        let mut methods = vec![];
+        while !self.check(RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+
+        self.consume(RightBrace, "Expect '}' after class body")?;
+        Ok(Stmt::class(name, methods))
+    }
+
+    fn function(&mut self, kind: &str) -> ParseResult<Function> {
         let name =
             self.consume(Identifier, format!("Expect {} name.", kind))?;
         self.consume(LeftParen, format!("Expect '(' after {} name.", kind))?;
@@ -136,7 +151,7 @@ impl Parser {
 
         self.consume(LeftBrace, format!("Expect '{{' before {} body.", kind))?;
         let body = self.block()?;
-        Ok(Stmt::function(name, params, body))
+        Ok(Function { name, params, body })
     }
 
     fn var_declaration(&mut self) -> ParseResult<Stmt> {
@@ -283,6 +298,8 @@ impl Parser {
 
             if let Expr::Variable { name } = expr {
                 return Ok(Expr::assign(name, value));
+            } else if let Expr::Get { object, name } = expr {
+                return Ok(Expr::set(*object, name, value));
             }
             self.error(equals, "Invalid assignment target.");
         }
@@ -378,6 +395,10 @@ impl Parser {
         loop {
             if self.match_(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_(&[Dot]) {
+                let name =
+                    self.consume(Identifier, "Expect property name after '.'")?;
+                expr = Expr::get(expr, name);
             } else {
                 break;
             }

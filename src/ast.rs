@@ -16,11 +16,20 @@ pub enum Expr {
         right_paren: Token,
         arguments: Vec<Expr>,
     },
+    Get {
+        object: Box<Expr>,
+        name: Token,
+    },
     Grouping {
         expr: Box<Expr>,
     },
     Literal {
         value: Value,
+    },
+    Set {
+        object: Box<Expr>,
+        name: Token,
+        value: Box<Expr>,
     },
     Unary {
         op: Token,
@@ -59,6 +68,13 @@ impl Expr {
         }
     }
 
+    pub fn get(object: Expr, name: Token) -> Self {
+        Self::Get {
+            object: Box::new(object),
+            name,
+        }
+    }
+
     pub fn grouping(expr: Expr) -> Self {
         Self::Grouping {
             expr: Box::new(expr),
@@ -67,6 +83,14 @@ impl Expr {
 
     pub fn literal(value: Value) -> Self {
         Self::Literal { value }
+    }
+
+    pub fn set(object: Expr, name: Token, value: Expr) -> Self {
+        Self::Set {
+            object: Box::new(object),
+            name,
+            value: Box::new(value),
+        }
     }
 
     pub fn unary(op: Token, right: Expr) -> Self {
@@ -86,14 +110,14 @@ pub enum Stmt {
     Block {
         statements: Vec<Stmt>,
     },
+    Class {
+        name: Token,
+        methods: Vec<Function>,
+    },
     Expression {
         expr: Expr,
     },
-    Function {
-        name: Token,
-        params: Vec<Token>,
-        body: Vec<Stmt>,
-    },
+    Function(Function),
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -116,9 +140,20 @@ pub enum Stmt {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Vec<Stmt>,
+}
+
 impl Stmt {
     pub fn block(statements: Vec<Stmt>) -> Self {
         Self::Block { statements }
+    }
+
+    pub fn class(name: Token, methods: Vec<Function>) -> Self {
+        Self::Class { name, methods }
     }
 
     pub fn expression(expr: Expr) -> Self {
@@ -126,7 +161,7 @@ impl Stmt {
     }
 
     pub fn function(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
-        Self::Function { name, params, body }
+        Self::Function(Function { name, params, body })
     }
 
     pub fn if_(
