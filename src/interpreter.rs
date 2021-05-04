@@ -1,12 +1,17 @@
 use crate::{
     ast::*,
-    environment::{Environment, MyRwLock},
+    environment::Environment,
     errors::{RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
     types::{Class, Instance, Value},
 };
 use core::fmt;
-use std::{collections::HashMap, io::Write, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    io::Write,
+    sync::{Arc, RwLock},
+    time::Instant,
+};
 
 pub struct Interpreter<'a> {
     start_time: Instant,
@@ -192,7 +197,7 @@ impl<'a> Interpreter<'a> {
                         ),
                     )),
                     Value::Class(class) if arguments.len() == 0 => {
-                        Ok(Value::Instance(Arc::new(MyRwLock::new(
+                        Ok(Value::Instance(Arc::new(RwLock::new(
                             Instance::new(class.clone()),
                         ))))
                     }

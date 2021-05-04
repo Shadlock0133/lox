@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::{Hash, Hasher},
-    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use crate::{
@@ -44,29 +44,6 @@ impl Hash for Inner {
             en.hash(state);
         }
         self.values.hash(state);
-    }
-}
-
-#[derive(Debug)]
-pub struct MyRwLock<T>(RwLock<T>);
-
-impl<T> MyRwLock<T> {
-    pub fn new(value: T) -> Self {
-        Self(RwLock::new(value))
-    }
-
-    pub fn read(&self) -> LockResult<RwLockReadGuard<T>> {
-        self.0.read()
-    }
-
-    pub fn write(&self) -> LockResult<RwLockWriteGuard<T>> {
-        self.0.write()
-    }
-}
-
-impl<T: Hash> Hash for MyRwLock<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.read().unwrap().hash(state);
     }
 }
 

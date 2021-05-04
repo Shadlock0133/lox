@@ -2,11 +2,11 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::{Hash, Hasher},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use crate::{
-    environment::{Environment, MyRwLock},
+    environment::Environment,
     errors::{RuntimeError, RuntimeResult},
     interpreter::Interpreter,
     tokens::Token,
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Value {
     Class(Class),
-    Instance(Arc<MyRwLock<Instance>>),
+    Instance(Arc<RwLock<Instance>>),
     Fun(Fun),
     String(String),
     Number(f64),
@@ -61,7 +61,7 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Self::Class(c) => c.hash(state),
-            Self::Instance(i) => i.hash(state),
+            Self::Instance(i) => i.read().unwrap().hash(state),
             Self::Fun(f) => f.hash(state),
             Self::Number(n) => n.to_le_bytes().hash(state),
             Self::String(s) => s.hash(state),
