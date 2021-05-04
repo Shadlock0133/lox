@@ -3,11 +3,11 @@ use crate::{
     environment::Environment,
     errors::{RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
-    types::{Class, Instance, Value},
+    types::{Class, Fun, Instance, NativeFunction, Value},
 };
 use core::fmt;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     io::Write,
     sync::{Arc, RwLock},
     time::Instant,
@@ -274,9 +274,24 @@ impl<'a> Interpreter<'a> {
                 self.execute_block(statements, self.current.enclose())
             }
 
-            Stmt::Class { name, .. } => {
+            Stmt::Class {
+                name,
+                methods: stmt_methods,
+            } => {
                 self.current.define(name.lexeme.clone(), Value::Nil);
-                let class = Class::new(name.lexeme.clone());
+
+                let mut methods = BTreeMap::new();
+                for method in stmt_methods {
+                    let function = NativeFunction {
+                        name: Box::new(method.name.clone()),
+                        params: method.params.clone(),
+                        body: method.body.clone(),
+                        closure: self.current.clone(),
+                    };
+                    methods.insert(method.name.lexeme.clone(), function);
+                }
+
+                let class = Class::new(name.lexeme.clone(), methods);
                 self.current
                     .define(name.lexeme.clone(), Value::Class(class));
                 Ok(())
@@ -286,12 +301,12 @@ impl<'a> Interpreter<'a> {
 
             Stmt::Function(Function { name, params, body }) => {
                 let closure = self.current.clone();
-                let function = Value::Fun(crate::types::Fun::Native {
+                let function = Value::Fun(Fun::Native(NativeFunction {
                     name: Box::new(name.clone()),
                     body: body.clone(),
                     params: params.clone(),
                     closure,
-                });
+                }));
                 self.current.define(name.lexeme.clone(), function);
                 Ok(())
             }

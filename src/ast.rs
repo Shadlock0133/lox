@@ -105,7 +105,7 @@ impl Expr {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum Stmt {
     Block {
         statements: Vec<Stmt>,
@@ -140,7 +140,7 @@ pub enum Stmt {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct Function {
     pub name: Token,
     pub params: Vec<Token>,

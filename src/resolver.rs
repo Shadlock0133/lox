@@ -10,6 +10,7 @@ use crate::{
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 #[derive(Debug)]
@@ -54,18 +55,17 @@ impl<'a> Resolver<'a> {
 
     fn resolve_function(
         &mut self,
-        params: &[Token],
-        body: &[Stmt],
+        function: &Function,
         typ: FunctionType,
     ) -> ResolveResult<()> {
         let enclosing = std::mem::replace(&mut self.current_function_type, typ);
 
         self.begin_scope();
-        for param in params {
+        for param in &function.params {
             self.declare(param)?;
             self.define(param)?;
         }
-        self.resolve(body)?;
+        self.resolve(&function.body)?;
         self.end_scope();
 
         self.current_function_type = enclosing;
@@ -120,15 +120,18 @@ impl<'a> Resolver<'a> {
                 self.resolve(statements)?;
                 self.end_scope();
             }
-            Stmt::Class { name, .. } => {
+            Stmt::Class { name, methods } => {
                 self.declare(name)?;
                 self.define(name)?;
+                for method in methods {
+                    self.resolve_function(method, FunctionType::Method)?;
+                }
             }
             Stmt::Expression { expr } => self.visit_expr(expr)?,
-            Stmt::Function(Function { name, params, body }) => {
-                self.declare(name)?;
-                self.define(name)?;
-                self.resolve_function(params, body, FunctionType::Function)?;
+            Stmt::Function(function) => {
+                self.declare(&function.name)?;
+                self.define(&function.name)?;
+                self.resolve_function(function, FunctionType::Function)?;
             }
             Stmt::If {
                 condition,

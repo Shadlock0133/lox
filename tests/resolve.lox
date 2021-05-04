@@ -4,7 +4,7 @@ var a = "global";
     print a;
   }
 
-  showA();
+  showA(); // expect: global
   var a = "block";
-  showA();
+  showA(); // expect: global
 }

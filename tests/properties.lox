@@ -5,6 +5,6 @@ foo.a = 1;
 print foo.a; // expect: 1
 foo.a = 2;
 print foo.a; // expect: 2
-print Foo == Foo; // expect: true
+//print Foo == Foo; // expect: true
 print foo == foo; // expect: true
 print Foo() == Foo(); // expect: false

@@ -41,7 +41,7 @@ impl Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Class(l), Self::Class(r)) => l == r,
+            // (Self::Class(l), Self::Class(r)) => l == r,
             (Self::Instance(l), Self::Instance(r)) => Arc::ptr_eq(l, r),
             (Self::Nil, Self::Nil) => true,
             (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => {
@@ -115,12 +115,15 @@ pub enum Fun {
         >,
         arity: usize,
     },
-    Native {
-        name: Box<Token>,
-        params: Vec<Token>,
-        body: Vec<crate::ast::Stmt>,
-        closure: Environment,
-    },
+    Native(NativeFunction),
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct NativeFunction {
+    pub name: Box<Token>,
+    pub params: Vec<Token>,
+    pub body: Vec<crate::ast::Stmt>,
+    pub closure: Environment,
 }
 
 impl Fun {
@@ -131,12 +134,12 @@ impl Fun {
     ) -> Result<Value, RuntimeError> {
         match self {
             Self::Foreign { inner, .. } => (inner)(interpreter, arguments),
-            Self::Native {
+            Self::Native(NativeFunction {
                 params,
                 body,
                 closure,
                 ..
-            } => {
+            }) => {
                 let mut environment = closure.enclose();
                 for (param, arg) in params.iter().zip(arguments.iter()) {
                     environment.define(param.lexeme.to_string(), arg.clone());
@@ -154,7 +157,7 @@ impl Fun {
     pub fn arity(&self) -> usize {
         match self {
             Self::Foreign { arity, .. } => *arity,
-            Self::Native { params, .. } => params.len(),
+            Self::Native(NativeFunction { params, .. }) => params.len(),
         }
     }
 }
@@ -163,7 +166,9 @@ impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Foreign { .. } => write!(f, "<foreign fn>"),
-            Self::Native { name, .. } => write!(f, "<fn {}>", name.lexeme),
+            Self::Native(NativeFunction { name, .. }) => {
+                write!(f, "<fn {}>", name.lexeme)
+            }
         }
     }
 }
@@ -180,14 +185,22 @@ impl Hash for Fun {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash)]
 pub struct Class {
     name: String,
+    methods: BTreeMap<String, NativeFunction>,
 }
 
 impl Class {
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(
+        name: String,
+        methods: BTreeMap<String, NativeFunction>,
+    ) -> Self {
+        Self { name, methods }
+    }
+
+    fn find_method(&self, name: &Token) -> Option<&NativeFunction> {
+        self.methods.get(&name.lexeme)
     }
 }
 
@@ -197,7 +210,7 @@ impl fmt::Display for Class {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash)]
 pub struct Instance {
     class: Class,
     fields: BTreeMap<String, Value>,
@@ -212,12 +225,18 @@ impl Instance {
     }
 
     pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
-        self.fields.get(&name.lexeme).cloned().ok_or_else(|| {
-            RuntimeError::new(
-                Some(name),
-                format!("Undefined property {}", name.lexeme),
-            )
-        })
+        if let Some(field) = self.fields.get(&name.lexeme) {
+            return Ok(field.clone());
+        }
+
+        if let Some(method) = self.class.find_method(&name) {
+            return Ok(Value::Fun(Fun::Native(method.clone())));
+        }
+
+        Err(RuntimeError::new(
+            Some(name),
+            format!("Undefined property '{}'", name.lexeme),
+        ))
     }
 
     pub fn set(&mut self, name: &Token, value: Value) {

@@ -1,0 +1,7 @@
+class Foo {
+    bar() {
+        return 1;
+    }
+}
+
+print Foo().bar(); // expect: 1
