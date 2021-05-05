@@ -146,30 +146,49 @@ impl<'a> Interpreter<'a> {
 
                 match op.type_ {
                     TokenType::Plus => match (left, right) {
-                        (Value::Number(l), Value::Number(r)) => Ok(Value::Number(l + r)),
-                        (Value::String(l), Value::String(r)) => Ok(Value::String(l + &r)),
-                        (Value::String(l), r) => Ok(Value::String(l + &r.to_string())),
-                        (l, Value::String(r)) => Ok(Value::String(l.to_string() + &r)),
+                        (Value::Number(l), Value::Number(r)) => {
+                            Ok(Value::Number(l + r))
+                        }
+                        (Value::String(l), Value::String(r)) => {
+                            Ok(Value::String(l + &r))
+                        }
                         _ => Err(RuntimeError::new(
                             Some(op),
-                            "Operands must begin with a string or be two numbers.",
+                            "Operands must be two numbers or two strings.",
                         )),
                     },
-                    TokenType::Minus => num_op(op, left, right, |l, r| Value::Number(l - r)),
-                    TokenType::Star => num_op(op, left, right, |l, r| Value::Number(l * r)),
-                    TokenType::Slash if right == Value::Number(0.0) => {
-                        Err(RuntimeError::new(Some(op), "Can't divide by zero."))
+                    TokenType::Minus => {
+                        num_op(op, left, right, |l, r| Value::Number(l - r))
                     }
-                    TokenType::Slash => num_op(op, left, right, |l, r| Value::Number(l / r)),
+                    TokenType::Star => {
+                        num_op(op, left, right, |l, r| Value::Number(l * r))
+                    }
+                    TokenType::Slash if right == Value::Number(0.0) => Err(
+                        RuntimeError::new(Some(op), "Can't divide by zero."),
+                    ),
+                    TokenType::Slash => {
+                        num_op(op, left, right, |l, r| Value::Number(l / r))
+                    }
 
-                    TokenType::Greater => num_op(op, left, right, |l, r| Value::Bool(l > r)),
-                    TokenType::GreaterEqual => num_op(op, left, right, |l, r| Value::Bool(l >= r)),
-                    TokenType::Less => num_op(op, left, right, |l, r| Value::Bool(l < r)),
-                    TokenType::LessEqual => num_op(op, left, right, |l, r| Value::Bool(l <= r)),
+                    TokenType::Greater => {
+                        num_op(op, left, right, |l, r| Value::Bool(l > r))
+                    }
+                    TokenType::GreaterEqual => {
+                        num_op(op, left, right, |l, r| Value::Bool(l >= r))
+                    }
+                    TokenType::Less => {
+                        num_op(op, left, right, |l, r| Value::Bool(l < r))
+                    }
+                    TokenType::LessEqual => {
+                        num_op(op, left, right, |l, r| Value::Bool(l <= r))
+                    }
 
                     TokenType::EqualEqual => Ok(Value::Bool(left == right)),
                     TokenType::BangEqual => Ok(Value::Bool(left != right)),
-                    _ => Err(RuntimeError::new(Some(op), "Invalid binary operator.")),
+                    _ => Err(RuntimeError::new(
+                        Some(op),
+                        "Invalid binary operator.",
+                    )),
                 }
             }
 
