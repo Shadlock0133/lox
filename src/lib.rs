@@ -129,12 +129,11 @@ pub fn run_tests(dir: impl AsRef<Path>) -> Result<()> {
     }
 }
 
-fn run(tokens: Vec<Token>) -> Result<String> {
+fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<()> {
     let mut parser = Parser::new(tokens);
     let mut program = parser.parse()?;
 
-    let mut output = vec![];
-    let mut interpreter = Interpreter::new(&mut output);
+    let mut interpreter = Interpreter::new(output);
 
     let mut resolver = Resolver::new(&mut interpreter.locals);
     resolver.resolve(&mut program)?;
@@ -142,17 +141,28 @@ fn run(tokens: Vec<Token>) -> Result<String> {
     interpreter.interpret(&mut program)?;
 
     drop(interpreter);
-    let output = String::from_utf8(output)?;
-    Ok(output)
+    Ok(())
 }
 
-fn extract_expects(file: impl AsRef<Path>) -> Result<(Vec<Token>, String)> {
-    let source = fs::read_to_string(file)?;
-    let mut tokens: Vec<_> = Tokenizer::new(&source)
-        .collect::<std::result::Result<_, errors::TokenizerError>>()?;
+struct Expect {
+    output: String,
+    runtime_error: Option<String>,
+}
 
+fn extract_expects(tokens: &[Token]) -> Expect {
     // Extract expected output
-    let expected: String = tokens
+    let runtime_error = tokens
+        .iter()
+        .filter_map(|t| {
+            if t.type_ != TokenType::Comment {
+                return None;
+            }
+            t.lexeme.trim().strip_prefix("// expect runtime error: ")
+        })
+        .next()
+        .map(ToOwned::to_owned);
+
+    let output: String = tokens
         .iter()
         .filter_map(|t| {
             if t.type_ != TokenType::Comment {
@@ -164,34 +174,58 @@ fn extract_expects(file: impl AsRef<Path>) -> Result<(Vec<Token>, String)> {
         .flat_map(|(a, b)| std::array::IntoIter::new([a, b]))
         .collect();
 
-    // Remove comments and whitespaces
-    tokens.retain(|x| !x.can_skip());
-
-    Ok((tokens, expected))
+    Expect {
+        output,
+        runtime_error,
+    }
 }
 
 pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
-    match extract_expects(file) {
-        Ok((tokens, expected)) => match run(tokens) {
-            Ok(output) => {
-                if output == expected {
-                    eprintln!("ok");
-                    Ok(())
-                } else {
-                    eprintln!("failed");
-                    eprintln!("    expected {:?}, got {:?}", expected, output);
-                    Err(anyhow::anyhow!("Test failed"))
-                }
-            }
-            Err(e) => {
+    let source = fs::read_to_string(file)?;
+    let mut tokens: Vec<_> = Tokenizer::new(&source)
+        // .inspect(|x| eprintln!("{:?}", x))
+        .collect::<std::result::Result<_, errors::TokenizerError>>()?;
+
+    let expected = extract_expects(&tokens);
+
+    // Remove comments and whitespaces
+    tokens.retain(|x| !x.can_skip());
+
+    let mut output = vec![];
+    let res = run(tokens, &mut output);
+    let output = String::from_utf8(output)?;
+    match (res, expected.runtime_error) {
+        (Ok(()), None) => {
+            if output == expected.output {
+                eprintln!("ok");
+                Ok(())
+            } else {
                 eprintln!("failed");
-                eprintln!("    runtime error: {}", e);
+                eprintln!(
+                    "    expected {:?}, got {:?}",
+                    expected.output, output
+                );
                 Err(anyhow::anyhow!("Test failed"))
             }
-        },
-        Err(e) => {
+        }
+        (Err(e), Some(re)) => {
+            if e.to_string().ends_with(&re) {
+                eprintln!("ok");
+                Ok(())
+            } else {
+                eprintln!("failed");
+                eprintln!("    expected {}, got {}", e, re);
+                Err(anyhow::anyhow!("Test failed"))
+            }
+        }
+        (Err(e), None) => {
             eprintln!("failed");
-            eprintln!("    parsing error: {}", e);
+            eprintln!("    unexpected runtime error: {}", e);
+            Err(anyhow::anyhow!("Test failed"))
+        }
+        (Ok(_), Some(_)) => {
+            eprintln!("failed");
+            eprintln!("    expected failure");
             Err(anyhow::anyhow!("Test failed"))
         }
     }

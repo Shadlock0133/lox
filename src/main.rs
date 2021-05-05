@@ -7,7 +7,7 @@ use lox::{run_test, run_tests, Lox};
 
 #[derive(StructOpt)]
 struct Opt {
-    #[structopt(long = "test")]
+    #[structopt(short = "t", long = "test")]
     test: bool,
     input: Option<PathBuf>,
 }
