@@ -24,10 +24,13 @@ fn run_tests_rec(
                 "test {} ... ",
                 path.strip_prefix(prefix.as_ref())?.display()
             );
-            let res = run_test(path);
+            let res = run_test(&path);
             match res {
                 Ok(_) => *passes += 1,
-                Err(_) => *fails += 1,
+                Err(_) => {
+                    eprintln!("    in {}", path.display());
+                    *fails += 1;
+                }
             }
         } else if file_type.is_dir() {
             if !SKIP.iter().any(|x| x == &path.file_name().unwrap()) {
@@ -70,8 +73,14 @@ struct Expect {
     runtime_error: Option<String>,
 }
 
+// Extract expected output and/or errors
 fn extract_expects(tokens: &[Token]) -> Expect {
-    // Extract expected output
+    let runtime_error_first_line = tokens
+        .get(0)
+        .filter(|t| t.type_ == TokenType::Comment)
+        .filter(|t| t.lexeme.contains("Error"))
+        .and_then(|t| t.lexeme.trim().splitn(2, ": ").last());
+
     let runtime_error = tokens
         .iter()
         .filter_map(|t| {
@@ -80,7 +89,10 @@ fn extract_expects(tokens: &[Token]) -> Expect {
             }
             t.lexeme.trim().strip_prefix("// expect runtime error: ")
         })
-        .next()
+        .next();
+
+    let runtime_error = runtime_error_first_line
+        .xor(runtime_error)
         .map(ToOwned::to_owned);
 
     let output: String = tokens

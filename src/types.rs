@@ -238,7 +238,7 @@ impl Instance {
 
         Err(RuntimeError::new(
             Some(name),
-            format!("Undefined property '{}'", name.lexeme),
+            format!("Undefined property '{}'.", name.lexeme),
         ))
     }
 
