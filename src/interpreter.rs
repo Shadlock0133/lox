@@ -123,7 +123,7 @@ impl<'a> Interpreter<'a> {
                         (Value::Number(l), Value::Number(r)) => Ok(f(l, r)),
                         _ => Err(RuntimeError::new(
                             Some(op),
-                            "Operands must be a numbers.",
+                            "Operands must be numbers.",
                         )),
                     }
                 }
@@ -163,9 +163,9 @@ impl<'a> Interpreter<'a> {
                     TokenType::Star => {
                         num_op(op, left, right, |l, r| Value::Number(l * r))
                     }
-                    TokenType::Slash if right == Value::Number(0.0) => Err(
-                        RuntimeError::new(Some(op), "Can't divide by zero."),
-                    ),
+                    // TokenType::Slash if right == Value::Number(0.0) => Err(
+                    //     RuntimeError::new(Some(op), "Can't divide by zero."),
+                    // ),
                     TokenType::Slash => {
                         num_op(op, left, right, |l, r| Value::Number(l / r))
                     }
@@ -210,7 +210,7 @@ impl<'a> Interpreter<'a> {
                     Value::Fun(f) => Err(RuntimeError::new(
                         Some(right_paren),
                         format!(
-                            "Expected {} arguments but got {}",
+                            "Expected {} arguments but got {}.",
                             f.arity(),
                             arguments.len()
                         ),
@@ -222,7 +222,7 @@ impl<'a> Interpreter<'a> {
                     }
                     _ => Err(RuntimeError::new(
                         Some(right_paren),
-                        "Can only call functions and classes",
+                        "Can only call functions and classes.",
                     )),
                 }
             }
@@ -234,7 +234,7 @@ impl<'a> Interpreter<'a> {
                 } else {
                     Err(RuntimeError::new(
                         Some(name),
-                        "Only instances have properties",
+                        "Only instances have properties.",
                     ))
                 }
             }
@@ -256,7 +256,7 @@ impl<'a> Interpreter<'a> {
                 } else {
                     Err(RuntimeError::new(
                         Some(name),
-                        "Only instances have fields",
+                        "Only instances have fields.",
                     ))
                 }
             }

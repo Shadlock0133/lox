@@ -114,15 +114,15 @@ impl Parser {
     }
 
     fn class(&mut self) -> ParseResult<Stmt> {
-        let name = self.consume(Identifier, "Expect class name")?;
-        self.consume(LeftBrace, "Expect '{' before class body")?;
+        let name = self.consume(Identifier, "Expect class name.")?;
+        self.consume(LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = vec![];
         while !self.check(RightBrace) && !self.is_at_end() {
             methods.push(self.function("method")?);
         }
 
-        self.consume(RightBrace, "Expect '}' after class body")?;
+        self.consume(RightBrace, "Expect '}' after class body.")?;
         Ok(Stmt::class(name, methods))
     }
 
@@ -155,13 +155,13 @@ impl Parser {
     }
 
     fn var_declaration(&mut self) -> ParseResult<Stmt> {
-        let name = self.consume(Identifier, "Expect variable name")?;
+        let name = self.consume(Identifier, "Expect variable name.")?;
         let init = if self.match_(&[Equal]) {
             Some(self.expression()?)
         } else {
             None
         };
-        self.consume(Semicolon, "Expect ';' after variable statement")?;
+        self.consume(Semicolon, "Expect ';' after variable statement.")?;
         Ok(Stmt::var(name, init))
     }
 
@@ -243,7 +243,7 @@ impl Parser {
 
     fn print_statement(&mut self) -> ParseResult<Stmt> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Expect ';' after value")?;
+        self.consume(Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::print(expr))
     }
 
@@ -281,7 +281,7 @@ impl Parser {
 
     fn expression_statement(&mut self) -> ParseResult<Stmt> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Expect ';' after value")?;
+        self.consume(Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::expression(expr))
     }
 
@@ -396,8 +396,8 @@ impl Parser {
             if self.match_(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
             } else if self.match_(&[Dot]) {
-                let name =
-                    self.consume(Identifier, "Expect property name after '.'")?;
+                let name = self
+                    .consume(Identifier, "Expect property name after '.'.")?;
                 expr = Expr::get(expr, name);
             } else {
                 break;
@@ -415,7 +415,7 @@ impl Parser {
                 if arguments.len() >= 255 {
                     self.error(
                         self.peek(),
-                        "Cannot have more than 255 arguments",
+                        "Cannot have more than 255 arguments.",
                     );
                 }
                 arguments.push(self.expression()?);
@@ -426,7 +426,7 @@ impl Parser {
         }
 
         let right_paren =
-            self.consume(RightParen, "Expect ')' after arguments")?;
+            self.consume(RightParen, "Expect ')' after arguments.")?;
 
         Ok(Expr::call(callee, right_paren, arguments))
     }
@@ -440,7 +440,7 @@ impl Parser {
             Ok(Expr::literal(Value::Nil))
         } else if self.match_(&[Number, String]) {
             Ok(Expr::literal(self.previous().literal.ok_or_else(|| {
-                self.error(self.peek(), "Missing literal")
+                self.error(self.peek(), "Missing literal.")
             })?))
         } else if self.match_(&[Identifier]) {
             Ok(Expr::variable(self.previous()))
@@ -449,7 +449,7 @@ impl Parser {
             self.consume(RightParen, "Expect ')' after expression.")?;
             Ok(Expr::grouping(expr))
         } else {
-            Err(self.error(self.peek(), "Not a valid expression"))
+            Err(self.error(self.peek(), "Expect expression."))
         }
     }
 }

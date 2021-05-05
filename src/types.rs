@@ -44,9 +44,9 @@ impl PartialEq for Value {
             // (Self::Class(l), Self::Class(r)) => l == r,
             (Self::Instance(l), Self::Instance(r)) => Arc::ptr_eq(l, r),
             (Self::Nil, Self::Nil) => true,
-            (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => {
-                true
-            }
+            // (Self::Number(l), Self::Number(r)) if l.is_nan() && r.is_nan() => {
+            //     true
+            // }
             (Self::Number(l), Self::Number(r)) => l == r,
             (Self::String(l), Self::String(r)) => l == r,
             (Self::Bool(l), Self::Bool(r)) => l == r,
@@ -78,6 +78,9 @@ impl fmt::Display for Value {
             Self::Instance(i) => write!(f, "{}", i.read().unwrap()),
             Self::Fun(fun) => write!(f, "{:?}", fun),
             Self::String(s) => write!(f, "{}", s),
+            Self::Number(n) if n.is_sign_negative() && *n == 0.0 => {
+                write!(f, "-0")
+            }
             Self::Number(n) => write!(f, "{}", n),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Nil => write!(f, "nil"),

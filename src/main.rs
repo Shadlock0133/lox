@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use anyhow::Result;
 use structopt::StructOpt;
 
-use lox::{run_test, run_tests, Lox};
+use lox::{
+    test_framework::{run_test, run_tests},
+    Lox,
+};
 
 #[derive(StructOpt)]
 struct Opt {
