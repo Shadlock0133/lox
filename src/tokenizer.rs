@@ -55,20 +55,21 @@ impl<'a> Tokenizer<'a> {
 
     // TODO: Add quote escaping for fun and profit
     fn string(&mut self) -> Option<&str> {
-        loop {
-            // while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() != '\\' && self.peek_next() == '"' {
+        if self.peek() != '"' {
+            loop {
+                if self.peek() != '\\' && self.peek_next() == '"' {
+                    self.advance();
+                    break;
+                }
+                if self.is_at_end() {
+                    break;
+                }
+                if self.peek() == '\n' {
+                    self.line_pos.0 += 1;
+                    self.line_pos.1 = 0;
+                }
                 self.advance();
-                break;
             }
-            if self.is_at_end() {
-                break;
-            }
-            if self.peek() == '\n' {
-                self.line_pos.0 += 1;
-                self.line_pos.1 = 0;
-            }
-            self.advance();
         }
 
         if self.is_at_end() {
