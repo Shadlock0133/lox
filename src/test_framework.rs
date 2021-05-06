@@ -155,6 +155,7 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
             return Err(e.into());
         }
     };
+    let unimplemented_class_syntax = ["'<'", "'this'", "'super'", "initializer"];
     match (res, expected.runtime_error) {
         (Ok(()), None) => {
             if output == expected.output {
@@ -176,7 +177,7 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
                 Ok(())
             } else {
                 eprintln!("failed");
-                if e.contains("'<'") || e.contains("'this'") {
+                if unimplemented_class_syntax.iter().any(|x| e.contains(x)) {
                     eprintln!("    unimplemented class syntax");
                 } else {
                     eprintln!("    expected error {:?},\n    got {:?}", e, re);
@@ -187,7 +188,7 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
         (Err(e), None) => {
             eprintln!("failed");
             let msg = e.to_string();
-            if msg.contains("'<'") || msg.contains("'this'") {
+            if unimplemented_class_syntax.iter().any(|x| msg.contains(x)) {
                 eprintln!("    unimplemented class syntax");
             } else {
                 eprintln!("    unexpected runtime error: {}", e);

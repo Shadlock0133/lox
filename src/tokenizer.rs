@@ -20,18 +20,14 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn advance(&mut self) -> char {
-        let char = self
-            .source
-            .get(self.current..)
-            .and_then(|x| x.chars().next())
-            .unwrap_or('\0');
+        let char = self.peek();
         self.current += char.len_utf8();
         self.line_pos.1 += 1;
         char
     }
 
     fn match_(&mut self, expected: char) -> bool {
-        let char = self.source.chars().nth(self.current).unwrap_or('\0');
+        let char = self.peek();
         let is_match = !self.is_at_end() && char == expected;
         if is_match {
             self.current += char.len_utf8();

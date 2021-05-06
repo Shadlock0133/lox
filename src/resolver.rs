@@ -79,7 +79,7 @@ impl<'a> Resolver<'a> {
                 Entry::Occupied(_) => {
                     return Err(ResolveError::new(
                         Some(name.clone()),
-                        "Variable already exists.",
+                        "Already variable with this name in this scope.",
                     ))
                 }
                 Entry::Vacant(vacant) => {
