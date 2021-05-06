@@ -7,7 +7,7 @@ use crate::{
 
 use anyhow::Result;
 
-const SKIP: &[&str] = &["benchmark", "limit", "scanning"];
+const SKIP: &[&str] = &["benchmark", "expressions", "limit", "scanning"];
 
 fn run_tests_rec(
     prefix: impl AsRef<Path>,
@@ -75,24 +75,31 @@ struct Expect {
 
 // Extract expected output and/or errors
 fn extract_expects(tokens: &[Token]) -> Expect {
-    let runtime_error_first_line = tokens
-        .get(0)
+    let runtime_error_direct = tokens
+        .iter()
         .filter(|t| t.type_ == TokenType::Comment)
-        .filter(|t| t.lexeme.contains("Error"))
-        .and_then(|t| t.lexeme.trim().splitn(2, ": ").last());
+        .filter(|t| t.lexeme.contains("Error at"))
+        .filter_map(|t| t.lexeme.trim().splitn(2, ": ").last())
+        .next();
 
-    let runtime_error = tokens
+    let runtime_error_expect = tokens
         .iter()
         .filter_map(|t| {
             if t.type_ != TokenType::Comment {
                 return None;
             }
-            t.lexeme.trim().strip_prefix("// expect runtime error: ")
+            t.lexeme
+                .trim()
+                .trim_start_matches("// ")
+                .strip_prefix("expect runtime error: ")
         })
         .next();
 
-    let runtime_error = runtime_error_first_line
-        .xor(runtime_error)
+    if runtime_error_direct.and(runtime_error_expect).is_some() {
+        panic!("both direct and expect errors");
+    }
+    let runtime_error = runtime_error_direct
+        .xor(runtime_error_expect)
         .map(ToOwned::to_owned);
 
     let output: String = tokens
@@ -101,7 +108,10 @@ fn extract_expects(tokens: &[Token]) -> Expect {
             if t.type_ != TokenType::Comment {
                 return None;
             }
-            t.lexeme.trim().strip_prefix("// expect: ")
+            t.lexeme
+                .trim()
+                .trim_start_matches("// ")
+                .strip_prefix("expect: ")
         })
         .flat_map(|x| std::array::IntoIter::new([x, "\n"]))
         .collect();
@@ -153,7 +163,7 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
             } else {
                 eprintln!("failed");
                 eprintln!(
-                    "    expected {:?},\n    got {:?}",
+                    "    expected output {:?},\n    got {:?}",
                     expected.output, output
                 );
                 Err(anyhow::anyhow!("Test failed"))
@@ -166,18 +176,27 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
                 Ok(())
             } else {
                 eprintln!("failed");
-                eprintln!("    expected {:?},\n    got {:?}", e, re);
+                if e.contains("'<'") || e.contains("'this'") {
+                    eprintln!("    unimplemented class syntax");
+                } else {
+                    eprintln!("    expected error {:?},\n    got {:?}", e, re);
+                }
                 Err(anyhow::anyhow!("Test failed"))
             }
         }
         (Err(e), None) => {
             eprintln!("failed");
-            eprintln!("    unexpected runtime error: {}", e);
+            let msg = e.to_string();
+            if msg.contains("'<'") || msg.contains("'this'") {
+                eprintln!("    unimplemented class syntax");
+            } else {
+                eprintln!("    unexpected runtime error: {}", e);
+            }
             Err(anyhow::anyhow!("Test failed"))
         }
-        (Ok(_), Some(_)) => {
+        (Ok(_), Some(re)) => {
             eprintln!("failed");
-            eprintln!("    expected failure");
+            eprintln!("    expected failure: {:?}", re);
             Err(anyhow::anyhow!("Test failed"))
         }
     }

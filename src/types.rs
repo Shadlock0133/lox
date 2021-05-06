@@ -168,7 +168,7 @@ impl Fun {
 impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Foreign { .. } => write!(f, "<foreign fn>"),
+            Self::Foreign { .. } => write!(f, "<native fn>"),
             Self::Native(NativeFunction { name, .. }) => {
                 write!(f, "<fn {}>", name.lexeme)
             }

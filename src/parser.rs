@@ -135,10 +135,10 @@ impl Parser {
         if !self.check(RightParen) {
             loop {
                 if params.len() >= 255 {
-                    self.error(
+                    return Err(self.error(
                         self.peek(),
-                        "Cannot have more than 255 parameters.",
-                    );
+                        "Can't have more than 255 parameters.",
+                    ));
                 }
                 params
                     .push(self.consume(Identifier, "Expect parameter name.")?);
@@ -301,7 +301,7 @@ impl Parser {
             } else if let Expr::Get { object, name } = expr {
                 return Ok(Expr::set(*object, name, value));
             }
-            self.error(equals, "Invalid assignment target.");
+            return Err(self.error(equals, "Invalid assignment target."));
         }
 
         Ok(expr)
@@ -412,13 +412,13 @@ impl Parser {
 
         if !self.check(RightParen) {
             loop {
-                if arguments.len() >= 255 {
-                    self.error(
-                        self.peek(),
-                        "Cannot have more than 255 arguments.",
-                    );
-                }
                 arguments.push(self.expression()?);
+                if arguments.len() >= 255 {
+                    return Err(self.error(
+                        self.peek(),
+                        "Can't have more than 255 arguments.",
+                    ));
+                }
                 if !self.match_(&[Comma]) {
                     break;
                 }

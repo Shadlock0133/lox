@@ -79,7 +79,7 @@ impl<'a> Resolver<'a> {
                 Entry::Occupied(_) => {
                     return Err(ResolveError::new(
                         Some(name.clone()),
-                        "Variable already exists",
+                        "Variable already exists.",
                     ))
                 }
                 Entry::Vacant(vacant) => {
@@ -97,7 +97,7 @@ impl<'a> Resolver<'a> {
                     if *occupied.get() == true {
                         return Err(ResolveError::new(
                             Some(name.clone()),
-                            "Double define",
+                            "Double define.",
                         ));
                     }
                     occupied.insert(true);
@@ -105,7 +105,7 @@ impl<'a> Resolver<'a> {
                 Entry::Vacant(_) => {
                     return Err(ResolveError::new(
                         Some(name.clone()),
-                        "Defining undeclared variable",
+                        "Defining undeclared variable.",
                     ))
                 }
             }
@@ -149,7 +149,7 @@ impl<'a> Resolver<'a> {
                 if matches!(self.current_function_type, FunctionType::None) {
                     return Err(ResolveError::new(
                         Some(keyword.clone()),
-                        "Can't return from top-level code",
+                        "Can't return from top-level code.",
                     ));
                 }
                 if let Some(value) = value {
@@ -207,7 +207,7 @@ impl<'a> Resolver<'a> {
                 {
                     return Err(ResolveError::new(
                         Some(name.clone()),
-                        "Can't read local variable in its own initializer",
+                        "Can't read local variable in its own initializer.",
                     ));
                 }
                 self.resolve_local(expr, name);

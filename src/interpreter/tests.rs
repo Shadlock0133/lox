@@ -112,7 +112,7 @@ fn scope_error() {
             }"
         )
         .to_string(),
-        "[line 3:21] Resolve Error at a: Variable already exists"
+        "[line 3:21] Resolve Error at 'a': Variable already exists."
     );
 
     assert_eq!(
@@ -124,7 +124,7 @@ fn scope_error() {
             }"
         )
         .to_string(),
-        "[line 3:25] Resolve Error at a: Can't read local variable in its own initializer"
+        "[line 3:25] Resolve Error at 'a': Can't read local variable in its own initializer."
     );
 }
 
@@ -139,7 +139,7 @@ fn closure_error() {
             print a;"
         )
         .to_string(),
-        "[line 5:19] Runtime Error at a: Undefined variable 'a'."
+        "[line 5:19] Runtime Error at 'a': Undefined variable 'a'."
     )
 }
 
