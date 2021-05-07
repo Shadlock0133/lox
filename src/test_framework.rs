@@ -60,7 +60,7 @@ fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<()> {
     let mut interpreter = Interpreter::new(output);
 
     let mut resolver = Resolver::new(&mut interpreter.locals);
-    resolver.resolve(&mut program)?;
+    resolver.resolve(&program)?;
 
     interpreter.interpret(&mut program)?;
 
@@ -79,7 +79,7 @@ fn extract_expects(tokens: &[Token]) -> Expect {
         .iter()
         .filter(|t| t.type_ == TokenType::Comment)
         .filter(|t| t.lexeme.contains("Error at"))
-        .filter_map(|t| t.lexeme.trim().splitn(2, ": ").last())
+        .filter_map(|t| t.lexeme.trim().split_once(": ").map(|x| x.1))
         .next();
 
     let runtime_error_expect = tokens
@@ -155,7 +155,8 @@ pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
             return Err(e.into());
         }
     };
-    let unimplemented_class_syntax = ["'<'", "'this'", "'super'", "initializer"];
+    let unimplemented_class_syntax =
+        ["'<'", "'this'", "'super'", "initializer"];
     match (res, expected.runtime_error) {
         (Ok(()), None) => {
             if output == expected.output {

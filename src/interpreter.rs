@@ -215,9 +215,9 @@ impl<'a> Interpreter<'a> {
                             arguments.len()
                         ),
                     )),
-                    Value::Class(class) if arguments.len() == 0 => {
+                    Value::Class(class) if arguments.is_empty() => {
                         Ok(Value::Instance(Arc::new(RwLock::new(
-                            Instance::new(class.clone()),
+                            Instance::new(class),
                         ))))
                     }
                     _ => Err(RuntimeError::new(
@@ -274,10 +274,12 @@ impl<'a> Interpreter<'a> {
                         Value::Number(-value)
                     }
                     TokenType::Bang => Value::Bool(!value.is_truthy()),
-                    _ => Err(RuntimeError::new(
-                        Some(op),
-                        "Unary expression must contain '-' or '!'.",
-                    ))?,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            Some(op),
+                            "Unary expression must contain '-' or '!'.",
+                        ))
+                    }
                 })
             }
 

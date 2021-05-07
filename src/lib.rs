@@ -77,7 +77,7 @@ impl Lox {
         let mut program = parser.parse()?;
 
         let mut resolver = Resolver::new(&mut self.interpreter.locals);
-        resolver.resolve(&mut program)?;
+        resolver.resolve(&program)?;
 
         self.interpreter.interpret(&mut program)?;
 

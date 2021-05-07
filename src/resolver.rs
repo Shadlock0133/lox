@@ -94,7 +94,7 @@ impl<'a> Resolver<'a> {
         if let Some(scope) = self.scopes.last_mut() {
             match scope.entry(name.lexeme.clone()) {
                 Entry::Occupied(mut occupied) => {
-                    if *occupied.get() == true {
+                    if *occupied.get() {
                         return Err(ResolveError::new(
                             Some(name.clone()),
                             "Double define.",

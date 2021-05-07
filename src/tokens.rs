@@ -63,10 +63,7 @@ pub struct Token {
 
 impl Token {
     pub fn can_skip(&self) -> bool {
-        match self.type_ {
-            TokenType::Comment | TokenType::Whitespace => true,
-            _ => false,
-        }
+        matches!(self.type_, TokenType::Comment | TokenType::Whitespace)
     }
 }
 

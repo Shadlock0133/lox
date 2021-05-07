@@ -105,19 +105,15 @@ impl Value {
     }
 }
 
+type ForeignFun = Arc<
+    dyn (Fn(&mut Interpreter, &mut [Value]) -> RuntimeResult<Value>)
+        + Send
+        + Sync,
+>;
+
 #[derive(Clone)]
 pub enum Fun {
-    Foreign {
-        inner: Arc<
-            dyn (Fn(
-                    &mut Interpreter,
-                    &mut [Value],
-                ) -> Result<Value, RuntimeError>)
-                + Send
-                + Sync,
-        >,
-        arity: usize,
-    },
+    Foreign { inner: ForeignFun, arity: usize },
     Native(NativeFunction),
 }
 
