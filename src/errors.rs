@@ -44,9 +44,9 @@ impl RuntimeError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenizerError {
-    #[error("Unexpected character: {0}")]
+    #[error("Unexpected character.")]
     UnexpectedChar(char),
-    #[error("Unterminated string")]
+    #[error("Unterminated string.")]
     UnterminatedString,
 }
 

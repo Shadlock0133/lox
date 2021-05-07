@@ -1,7 +1,11 @@
-use std::{fs, path::Path};
+use std::{fs, io, path::Path, string::FromUtf8Error};
 
 use crate::{
-    errors, interpreter::*, parser::*, resolver::Resolver, tokenizer::*,
+    errors::{ParseError, ResolveError, RuntimeError, TokenizerError},
+    interpreter::*,
+    parser::*,
+    resolver::Resolver,
+    tokenizer::*,
     tokens::*,
 };
 
@@ -20,13 +24,9 @@ fn run_tests_rec(
         let file_type = entry.file_type()?;
         let path = entry.path();
         if file_type.is_file() {
-            eprint!(
-                "test {} ... ",
-                path.strip_prefix(prefix.as_ref())?.display()
-            );
-            let res = run_test(&path);
+            let res = run_test_without_prefix(prefix.as_ref(), &path);
             match res {
-                Ok(_) => *passes += 1,
+                Ok(()) => *passes += 1,
                 Err(_) => {
                     eprintln!("    in {}", path.display());
                     *fails += 1;
@@ -53,7 +53,17 @@ pub fn run_tests(dir: impl AsRef<Path>) -> Result<()> {
     }
 }
 
-fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<()> {
+#[derive(Debug, thiserror::Error)]
+pub enum RunError {
+    #[error("Parse error: {0}")]
+    Parse(#[from] ParseError),
+    #[error("Resolve error: {0}")]
+    Resolve(#[from] ResolveError),
+    #[error("Runtime error: {0}")]
+    Runtime(#[from] RuntimeError),
+}
+
+fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<(), RunError> {
     let mut parser = Parser::new(tokens);
     let mut program = parser.parse()?;
 
@@ -122,84 +132,136 @@ fn extract_expects(tokens: &[Token]) -> Expect {
     }
 }
 
-fn tokenize(file: impl AsRef<Path>) -> Result<Vec<Token>> {
-    let source = fs::read_to_string(file)?;
-    let tokens: Vec<_> = Tokenizer::new(&source)
-        // .inspect(|x| eprintln!("{:?}", x))
-        .collect::<std::result::Result<_, errors::TokenizerError>>()?;
-    Ok(tokens)
+fn tokenize(source: &str) -> Result<Vec<Token>, TokenizerError> {
+    Tokenizer::new(source).collect()
 }
 
-pub fn run_test(file: impl AsRef<Path>) -> Result<()> {
-    let mut tokens = match tokenize(file) {
+#[derive(Debug, thiserror::Error)]
+pub enum TestError {
+    #[error("Io error: {0}")]
+    Io(#[from] io::Error),
+    #[error("Non Utf8 output: {0}")]
+    NonUtf8Output(#[from] FromUtf8Error),
+    #[error("{0:?}, {1}")]
+    Tokenizer(Option<String>, TokenizerError),
+    #[error("{0:?}, {1}")]
+    Run(Option<String>, RunError),
+    #[error("{0}")]
+    MissingRunError(String),
+    #[error("{0}, {1}")]
+    WrongOutput(String, String),
+}
+
+pub fn run_test(path: impl AsRef<Path>) -> Result<()> {
+    run_test_without_prefix("", path)
+}
+
+const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] =
+    &["'<'", "'this'", "'super'", "initializer"];
+
+fn run_test_without_prefix(
+    prefix: impl AsRef<Path>,
+    path: impl AsRef<Path>,
+) -> Result<()> {
+    eprint!(
+        "test {} ... ",
+        path.as_ref()
+            .strip_prefix(prefix.as_ref())
+            .unwrap()
+            .display()
+    );
+    let error = match test_handler(path) {
+        Ok(()) => {
+            eprintln!("ok");
+            return Ok(());
+        }
+        Err(e) => e,
+    };
+    eprintln!("failed");
+    match &error {
+        TestError::Tokenizer(Some(expected), got) => {
+            eprintln!("    expected tokenize error: {:?}", expected);
+            eprintln!("    got: {}", got);
+        }
+        TestError::Tokenizer(None, got) => {
+            eprintln!("    tokenize error: {}", got)
+        }
+        TestError::Run(Some(expected), got) => {
+            let msg = got.to_string();
+            if UNIMPLEMENTED_CLASS_SYNTAX.iter().any(|x| msg.contains(x)) {
+                eprintln!("    unimplemented class syntax");
+            } else {
+                eprintln!("    expected error {:?}", expected);
+                eprintln!("    got {}", got);
+            }
+        }
+        TestError::Run(None, got) => {
+            let msg = got.to_string();
+            if UNIMPLEMENTED_CLASS_SYNTAX.iter().any(|x| msg.contains(x)) {
+                eprintln!("    unimplemented class syntax");
+            } else {
+                eprintln!("    unexpected runtime error: {}", got);
+            }
+        }
+        TestError::MissingRunError(got) => {
+            eprintln!("    expected failure: {:?}", got)
+        }
+        TestError::WrongOutput(expected, got) => {
+            eprintln!("    expected output: {:?}", expected);
+            eprintln!("    got: {:?}", got);
+        }
+        TestError::Io(e) => eprintln!("    {:?}", e),
+        TestError::NonUtf8Output(e) => eprintln!("    {:?}", e),
+    }
+    Err(error.into())
+}
+
+// Check for expected tokenize error on first line
+// Can't use `extract_expects` because it takes already tokenized input
+fn first_line_expect(source: &str) -> Option<String> {
+    Tokenizer::new(&source)
+        .next()
+        // if there was an error on first token, it probably wasn't an expect
+        .transpose()
+        .ok()
+        .flatten()
+        // check if it's an expect
+        .filter(|x| x.type_ == TokenType::Comment)
+        .filter(|x| x.lexeme.contains("Error"))
+        .as_ref()
+        // extract expected message
+        .and_then(|x| x.lexeme.trim().split_once(": ").map(|x| x.1))
+        .map(ToOwned::to_owned)
+}
+
+fn test_handler(file: impl AsRef<Path>) -> Result<(), TestError> {
+    let source = fs::read_to_string(file)?;
+    let mut all_tokens = match tokenize(&source) {
         Ok(tokens) => tokens,
         Err(e) => {
-            eprintln!("failed");
-            eprintln!("    tokenize error: {}", e);
-            return Err(e);
+            return match first_line_expect(&source) {
+                Some(expected) if e.to_string().ends_with(&expected) => Ok(()),
+                Some(expected) => Err(TestError::Tokenizer(Some(expected), e)),
+                None => Err(TestError::Tokenizer(None, e)),
+            };
         }
     };
 
-    let expected = extract_expects(&tokens);
+    let expected = extract_expects(&all_tokens);
 
-    // Remove comments and whitespaces
-    tokens.retain(|x| !x.can_skip());
+    // Removes comments and whitespaces
+    all_tokens.retain(|x| !x.can_skip());
+    let tokens = all_tokens;
 
     let mut output = vec![];
     let res = run(tokens, &mut output);
-    let output = match String::from_utf8(output) {
-        Ok(string) => string,
-        Err(e) => {
-            eprintln!("failed");
-            eprintln!("    string error: {}", e);
-            return Err(e.into());
-        }
-    };
-    let unimplemented_class_syntax =
-        ["'<'", "'this'", "'super'", "initializer"];
+    let output = String::from_utf8(output)?;
     match (res, expected.runtime_error) {
-        (Ok(()), None) => {
-            if output == expected.output {
-                eprintln!("ok");
-                Ok(())
-            } else {
-                eprintln!("failed");
-                eprintln!(
-                    "    expected output {:?},\n    got {:?}",
-                    expected.output, output
-                );
-                Err(anyhow::anyhow!("Test failed"))
-            }
-        }
-        (Err(e), Some(re)) => {
-            let e = e.to_string();
-            if e.ends_with(&re) {
-                eprintln!("ok");
-                Ok(())
-            } else {
-                eprintln!("failed");
-                if unimplemented_class_syntax.iter().any(|x| e.contains(x)) {
-                    eprintln!("    unimplemented class syntax");
-                } else {
-                    eprintln!("    expected error {:?},\n    got {:?}", e, re);
-                }
-                Err(anyhow::anyhow!("Test failed"))
-            }
-        }
-        (Err(e), None) => {
-            eprintln!("failed");
-            let msg = e.to_string();
-            if unimplemented_class_syntax.iter().any(|x| msg.contains(x)) {
-                eprintln!("    unimplemented class syntax");
-            } else {
-                eprintln!("    unexpected runtime error: {}", e);
-            }
-            Err(anyhow::anyhow!("Test failed"))
-        }
-        (Ok(_), Some(re)) => {
-            eprintln!("failed");
-            eprintln!("    expected failure: {:?}", re);
-            Err(anyhow::anyhow!("Test failed"))
-        }
+        (Ok(()), None) if output == expected.output => Ok(()),
+        (Ok(()), None) => Err(TestError::WrongOutput(expected.output, output)),
+        (Err(e), Some(re)) if e.to_string().ends_with(&re) => Ok(()),
+        (Err(e), Some(re)) => Err(TestError::Run(Some(re), e)),
+        (Err(e), None) => Err(TestError::Run(None, e)),
+        (Ok(_), Some(re)) => Err(TestError::MissingRunError(re)),
     }
 }
