@@ -72,7 +72,9 @@ fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<(), RunError> {
     let mut resolver = Resolver::new(&mut interpreter.locals);
     resolver.resolve(&program)?;
 
-    interpreter.interpret(&mut program)?;
+    interpreter
+        .interpret(&mut program)
+        .map_err(|x| x.into_error())?;
 
     drop(interpreter);
     Ok(())

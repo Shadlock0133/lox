@@ -1,15 +1,14 @@
 use crate::{
     ast::*,
     environment::Environment,
-    errors::{RuntimeError, RuntimeResult},
+    errors::{ControlFlow, RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
-    types::{Class, Fun, Instance, NativeFunction, Value},
+    types::{Class, Fun, Instance, LoxFunction, Value, ValueRef},
 };
 use core::fmt;
 use std::{
     collections::{BTreeMap, HashMap},
     io::Write,
-    sync::{Arc, RwLock},
     time::Instant,
 };
 
@@ -39,15 +38,17 @@ impl<'a> Interpreter<'a> {
 
         global.define(
             "clock".into(),
-            Value::fun(0, |interpreter, _| {
+            ValueRef::fun(0, |interpreter, _| {
                 let dur = interpreter.start_time.elapsed();
-                Ok(Value::Number(dur.as_nanos() as f64 * 1e-9))
+                Ok(ValueRef::from_value(Value::Number(
+                    dur.as_nanos() as f64 * 1e-9,
+                )))
             }),
         );
 
         global.define(
             "panic".into(),
-            Value::fun(0, |_, _| {
+            ValueRef::fun(0, |_, _| {
                 Err(RuntimeError::new(None, "Explicit panic"))
             }),
         );
@@ -71,7 +72,7 @@ impl<'a> Interpreter<'a> {
         })();
 
         match result {
-            Err(RuntimeError::Error(_)) => result,
+            Err(ControlFlow::Error(_)) => result,
             _ => Ok(()),
         }
     }
@@ -97,14 +98,14 @@ impl<'a> Interpreter<'a> {
         &self,
         name: &Token,
         expr: &Expr,
-    ) -> RuntimeResult<Value> {
+    ) -> RuntimeResult<ValueRef> {
         match self.locals.get(expr) {
             Some(&distance) => self.current.get_at(distance, name),
             None => self.global.get(name),
         }
     }
 
-    fn visit_expr(&mut self, expr: &mut Expr) -> RuntimeResult<Value> {
+    fn visit_expr(&mut self, expr: &mut Expr) -> RuntimeResult<ValueRef> {
         match expr {
             Expr::Assign { name, value } => {
                 let value = self.visit_expr(value)?;
@@ -113,13 +114,13 @@ impl<'a> Interpreter<'a> {
             }
 
             Expr::Binary { op, left, right } => {
-                fn num_op<F: Fn(f64, f64) -> Value>(
+                fn num_op<F: Fn(f64, f64) -> ValueRef>(
                     op: &Token,
-                    l: Value,
-                    r: Value,
+                    l: ValueRef,
+                    r: ValueRef,
                     f: F,
-                ) -> RuntimeResult<Value> {
-                    match (l, r) {
+                ) -> RuntimeResult<ValueRef> {
+                    match (l.value(), r.value()) {
                         (Value::Number(l), Value::Number(r)) => Ok(f(l, r)),
                         _ => Err(RuntimeError::new(
                             Some(op),
@@ -131,12 +132,16 @@ impl<'a> Interpreter<'a> {
                 let left = self.visit_expr(&mut *left)?;
 
                 match op.type_ {
-                    TokenType::Or if left.is_truthy() => return Ok(left),
-                    TokenType::Or if !left.is_truthy() => {
+                    TokenType::Or if left.value().is_truthy() => {
+                        return Ok(left)
+                    }
+                    TokenType::Or if !left.value().is_truthy() => {
                         return self.visit_expr(&mut *right)
                     }
-                    TokenType::And if !left.is_truthy() => return Ok(left),
-                    TokenType::And if left.is_truthy() => {
+                    TokenType::And if !left.value().is_truthy() => {
+                        return Ok(left)
+                    }
+                    TokenType::And if left.value().is_truthy() => {
                         return self.visit_expr(&mut *right)
                     }
                     _ => (),
@@ -145,46 +150,52 @@ impl<'a> Interpreter<'a> {
                 let right = self.visit_expr(&mut *right)?;
 
                 match op.type_ {
-                    TokenType::Plus => match (left, right) {
+                    TokenType::Plus => match (left.value(), right.value()) {
                         (Value::Number(l), Value::Number(r)) => {
-                            Ok(Value::Number(l + r))
+                            Ok(ValueRef::from_value(Value::Number(l + r)))
                         }
                         (Value::String(l), Value::String(r)) => {
-                            Ok(Value::String(l + &r))
+                            Ok(ValueRef::from_value(Value::String(l + &r)))
                         }
                         _ => Err(RuntimeError::new(
                             Some(op),
                             "Operands must be two numbers or two strings.",
                         )),
                     },
-                    TokenType::Minus => {
-                        num_op(op, left, right, |l, r| Value::Number(l - r))
-                    }
-                    TokenType::Star => {
-                        num_op(op, left, right, |l, r| Value::Number(l * r))
-                    }
+                    TokenType::Minus => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Number(l - r))
+                    }),
+                    TokenType::Star => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Number(l * r))
+                    }),
                     // TokenType::Slash if right == Value::Number(0.0) => Err(
                     //     RuntimeError::new(Some(op), "Can't divide by zero."),
                     // ),
-                    TokenType::Slash => {
-                        num_op(op, left, right, |l, r| Value::Number(l / r))
-                    }
+                    TokenType::Slash => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Number(l / r))
+                    }),
 
-                    TokenType::Greater => {
-                        num_op(op, left, right, |l, r| Value::Bool(l > r))
-                    }
+                    TokenType::Greater => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Bool(l > r))
+                    }),
                     TokenType::GreaterEqual => {
-                        num_op(op, left, right, |l, r| Value::Bool(l >= r))
+                        num_op(op, left, right, |l, r| {
+                            ValueRef::from_value(Value::Bool(l >= r))
+                        })
                     }
-                    TokenType::Less => {
-                        num_op(op, left, right, |l, r| Value::Bool(l < r))
-                    }
-                    TokenType::LessEqual => {
-                        num_op(op, left, right, |l, r| Value::Bool(l <= r))
-                    }
+                    TokenType::Less => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Bool(l < r))
+                    }),
+                    TokenType::LessEqual => num_op(op, left, right, |l, r| {
+                        ValueRef::from_value(Value::Bool(l <= r))
+                    }),
 
-                    TokenType::EqualEqual => Ok(Value::Bool(left == right)),
-                    TokenType::BangEqual => Ok(Value::Bool(left != right)),
+                    TokenType::EqualEqual => {
+                        Ok(ValueRef::from_value(Value::Bool(left == right)))
+                    }
+                    TokenType::BangEqual => {
+                        Ok(ValueRef::from_value(Value::Bool(left != right)))
+                    }
                     _ => Err(RuntimeError::new(
                         Some(op),
                         "Invalid binary operator.",
@@ -198,12 +209,12 @@ impl<'a> Interpreter<'a> {
                 arguments,
             } => {
                 let callee = self.visit_expr(callee)?;
-                let mut arguments: Vec<Value> = arguments
+                let mut arguments: Vec<ValueRef> = arguments
                     .iter_mut()
                     .map(|e| self.visit_expr(e))
                     .collect::<Result<_, _>>()?;
 
-                match callee {
+                match callee.value() {
                     Value::Fun(mut f) if f.arity() == arguments.len() => {
                         f.call(self, &mut arguments)
                     }
@@ -216,9 +227,9 @@ impl<'a> Interpreter<'a> {
                         ),
                     )),
                     Value::Class(class) if arguments.is_empty() => {
-                        Ok(Value::Instance(Arc::new(RwLock::new(
+                        Ok(ValueRef::from_value(Value::Instance(
                             Instance::new(class),
-                        ))))
+                        )))
                     }
                     _ => Err(RuntimeError::new(
                         Some(right_paren),
@@ -229,8 +240,9 @@ impl<'a> Interpreter<'a> {
 
             Expr::Get { object, name } => {
                 let object = self.visit_expr(object)?;
-                if let Value::Instance(instance) = object {
-                    instance.read().unwrap().get(name)
+                let value = &*object.get_mut();
+                if let Value::Instance(instance) = value {
+                    instance.get(name)
                 } else {
                     Err(RuntimeError::new(
                         Some(name),
@@ -241,7 +253,7 @@ impl<'a> Interpreter<'a> {
 
             Expr::Grouping { expr } => self.visit_expr(expr),
 
-            Expr::Literal { value } => Ok(value.clone()),
+            Expr::Literal { value } => Ok(ValueRef::from_value(value.clone())),
 
             Expr::Set {
                 object,
@@ -249,9 +261,14 @@ impl<'a> Interpreter<'a> {
                 value,
             } => {
                 let object = self.visit_expr(object)?;
-                if let Value::Instance(instance) = object {
+                if object.is_instance() {
                     let value = self.visit_expr(value)?;
-                    instance.write().unwrap().set(name, value.clone());
+                    let mut get_mut = object.get_mut();
+                    let instance = match *get_mut {
+                        Value::Instance(ref mut i) => i,
+                        _ => unreachable!(),
+                    };
+                    instance.set(name, value.clone());
                     Ok(value)
                 } else {
                     Err(RuntimeError::new(
@@ -265,15 +282,18 @@ impl<'a> Interpreter<'a> {
                 let value = self.visit_expr(&mut *right)?;
                 Ok(match op.type_ {
                     TokenType::Minus => {
-                        let value = value.as_number().ok_or_else(|| {
-                            RuntimeError::new(
-                                Some(op),
-                                "Operand must be a number.",
-                            )
-                        })?;
-                        Value::Number(-value)
+                        let value =
+                            value.value().as_number().ok_or_else(|| {
+                                RuntimeError::new(
+                                    Some(op),
+                                    "Operand must be a number.",
+                                )
+                            })?;
+                        ValueRef::from_value(Value::Number(-value))
                     }
-                    TokenType::Bang => Value::Bool(!value.is_truthy()),
+                    TokenType::Bang => ValueRef::from_value(Value::Bool(
+                        !value.value().is_truthy(),
+                    )),
                     _ => {
                         return Err(RuntimeError::new(
                             Some(op),
@@ -299,11 +319,11 @@ impl<'a> Interpreter<'a> {
                 name,
                 methods: stmt_methods,
             } => {
-                self.current.define(name.lexeme.clone(), Value::Nil);
+                self.current.define(name.lexeme.clone(), ValueRef::nil());
 
                 let mut methods = BTreeMap::new();
                 for method in stmt_methods {
-                    let function = NativeFunction {
+                    let function = LoxFunction {
                         name: Box::new(method.name.clone()),
                         params: method.params.clone(),
                         body: method.body.clone(),
@@ -313,21 +333,24 @@ impl<'a> Interpreter<'a> {
                 }
 
                 let class = Class::new(name.lexeme.clone(), methods);
-                self.current
-                    .define(name.lexeme.clone(), Value::Class(class));
+                self.current.define(
+                    name.lexeme.clone(),
+                    ValueRef::from_value(Value::Class(class)),
+                );
                 Ok(())
             }
 
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
             Stmt::Function(Function { name, params, body }) => {
-                let closure = self.current.clone();
-                let function = Value::Fun(Fun::Native(NativeFunction {
-                    name: Box::new(name.clone()),
-                    body: body.clone(),
-                    params: params.clone(),
-                    closure,
-                }));
+                let closure = self.current.enclose();
+                let function =
+                    ValueRef::from_value(Value::Fun(Fun::Lox(LoxFunction {
+                        name: Box::new(name.clone()),
+                        body: body.clone(),
+                        params: params.clone(),
+                        closure,
+                    })));
                 self.current.define(name.lexeme.clone(), function);
                 Ok(())
             }
@@ -337,7 +360,7 @@ impl<'a> Interpreter<'a> {
                 then_branch,
                 else_branch,
             } => {
-                if self.visit_expr(condition)?.is_truthy() {
+                if self.visit_expr(condition)?.value().is_truthy() {
                     self.visit_stmt(then_branch)?;
                 } else if let Some(else_branch) = else_branch {
                     self.visit_stmt(else_branch)?;
@@ -347,16 +370,16 @@ impl<'a> Interpreter<'a> {
 
             Stmt::PrintStmt { expr } => {
                 let value = self.visit_expr(expr)?;
-                writeln!(self.output, "{}", value)
+                writeln!(self.output, "{}", value.value())
                     .map_err(|e| RuntimeError::new(None, e.to_string()))
             }
 
-            Stmt::Return { keyword: _, value } => Err(RuntimeError::Return(
+            Stmt::Return { keyword: _, value } => Err(ControlFlow::Return(
                 value
                     .as_mut()
                     .map(|e| self.visit_expr(e))
                     .transpose()?
-                    .unwrap_or(Value::Nil),
+                    .unwrap_or(ValueRef::nil()),
             )),
 
             Stmt::Var { name, init } => {
@@ -364,13 +387,13 @@ impl<'a> Interpreter<'a> {
                     .as_mut()
                     .map(|e| self.visit_expr(e))
                     .transpose()?
-                    .unwrap_or(Value::Nil);
+                    .unwrap_or(ValueRef::nil());
                 self.current.define(name.lexeme.clone(), value);
                 Ok(())
             }
 
             Stmt::While { condition, body } => {
-                while self.visit_expr(condition)?.is_truthy() {
+                while self.visit_expr(condition)?.value().is_truthy() {
                     self.visit_stmt(body)?;
                 }
                 Ok(())

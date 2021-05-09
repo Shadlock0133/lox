@@ -1,6 +1,6 @@
 use crate::{
     tokens::{Token, TokenType},
-    types::Value,
+    types::ValueRef,
 };
 
 #[derive(Debug)]
@@ -25,20 +25,42 @@ impl GenericError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum RuntimeError {
+pub enum ControlFlow {
     #[error("Unexpected return")]
-    Return(Value),
+    Return(ValueRef),
     #[error("Unexpected break")]
     Break,
-    #[error("{}", _0.to_string("Runtime "))]
-    Error(GenericError),
+    #[error("{0}")]
+    Error(RuntimeError),
 }
 
-pub type RuntimeResult<T> = Result<T, RuntimeError>;
+#[derive(Debug, thiserror::Error)]
+#[error("{}", _0.to_string("Runtime "))]
+pub struct RuntimeError(GenericError);
+
+pub type RuntimeResult<T> = Result<T, ControlFlow>;
 
 impl RuntimeError {
-    pub fn new<S: Into<String>>(token: Option<&Token>, message: S) -> Self {
-        Self::Error(GenericError(token.cloned(), message.into()))
+    pub fn new<S: Into<String>>(
+        token: Option<&Token>,
+        message: S,
+    ) -> ControlFlow {
+        ControlFlow::Error(Self(GenericError(token.cloned(), message.into())))
+    }
+}
+
+impl ControlFlow {
+    pub fn into_error(self) -> RuntimeError {
+        match self {
+            ControlFlow::Return(value) => RuntimeError(GenericError(
+                None,
+                format!("Unexpected return: {}", value.value()),
+            )),
+            ControlFlow::Break => {
+                RuntimeError(GenericError(None, format!("Unexpected break")))
+            }
+            ControlFlow::Error(err) => err,
+        }
     }
 }
 

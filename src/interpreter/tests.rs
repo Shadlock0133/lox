@@ -36,7 +36,7 @@ fn interpreter_error(x: &str) -> RuntimeError {
         .resolve(&mut ast)
         .unwrap();
 
-    let error = interpreter.interpret(&mut ast).unwrap_err();
+    let error = interpreter.interpret(&mut ast).unwrap_err().into_error();
     error
 }
 

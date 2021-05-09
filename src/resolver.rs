@@ -131,7 +131,9 @@ impl<'a> Resolver<'a> {
             Stmt::Function(function) => {
                 self.declare(&function.name)?;
                 self.define(&function.name)?;
+                self.begin_scope();
                 self.resolve_function(function, FunctionType::Function)?;
+                self.end_scope();
             }
             Stmt::If {
                 condition,

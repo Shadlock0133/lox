@@ -8,7 +8,7 @@ use std::{
 use crate::{
     errors::{RuntimeError, RuntimeResult},
     tokens::Token,
-    types::Value,
+    types::ValueRef,
 };
 
 #[derive(Clone)]
@@ -26,6 +26,14 @@ impl fmt::Debug for Environment {
     }
 }
 
+impl PartialEq for Environment {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for Environment {}
+
 impl Hash for Environment {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.read().hash(state);
@@ -35,7 +43,7 @@ impl Hash for Environment {
 #[derive(Default)]
 struct Inner {
     enclosing: Option<Environment>,
-    values: BTreeMap<String, Value>,
+    values: BTreeMap<String, ValueRef>,
 }
 
 impl Hash for Inner {
@@ -77,15 +85,15 @@ impl Environment {
         self.inner.try_write().unwrap()
     }
 
-    pub fn define(&mut self, name: String, value: Value) {
+    pub fn define(&mut self, name: String, value: ValueRef) {
         self.write().values.insert(name, value);
     }
 
     pub fn assign(
         &mut self,
         name: &Token,
-        value: Value,
-    ) -> Result<(), RuntimeError> {
+        value: ValueRef,
+    ) -> RuntimeResult<()> {
         let mut write = self.write();
         if let Some(v) = write.values.get_mut(&name.lexeme) {
             *v = value;
@@ -100,7 +108,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
+    pub fn get(&self, name: &Token) -> RuntimeResult<ValueRef> {
         if let Some(value) = self.read().values.get(&name.lexeme) {
             Ok(value.clone())
         } else if let Some(en) = &self.read().enclosing {
@@ -117,7 +125,7 @@ impl Environment {
         &self,
         distance: usize,
         name: &Token,
-    ) -> RuntimeResult<Value> {
+    ) -> RuntimeResult<ValueRef> {
         self.ancestor(distance)
             .ok_or_else(|| {
                 RuntimeError::new(Some(name), "Non-existent env ancestor")
