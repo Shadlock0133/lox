@@ -240,9 +240,9 @@ impl<'a> Interpreter<'a> {
 
             Expr::Get { object, name } => {
                 let object = self.visit_expr(object)?;
-                let value = &*object.get_mut();
+                let value = &*object.get();
                 if let Value::Instance(instance) = value {
-                    instance.get(name)
+                    instance.get(&object, name)
                 } else {
                     Err(RuntimeError::new(
                         Some(name),
@@ -261,13 +261,9 @@ impl<'a> Interpreter<'a> {
                 value,
             } => {
                 let object = self.visit_expr(object)?;
-                if object.is_instance() {
-                    let value = self.visit_expr(value)?;
-                    let mut get_mut = object.get_mut();
-                    let instance = match *get_mut {
-                        Value::Instance(ref mut i) => i,
-                        _ => unreachable!(),
-                    };
+                let value = self.visit_expr(value)?;
+                let get_mut = &mut *object.get_mut();
+                if let Value::Instance(instance) = get_mut {
                     instance.set(name, value.clone());
                     Ok(value)
                 } else {
@@ -276,6 +272,10 @@ impl<'a> Interpreter<'a> {
                         "Only instances have fields.",
                     ))
                 }
+            }
+
+            Expr::This { keyword } => {
+                self.lookup_variable(&keyword.clone(), expr)
             }
 
             Expr::Unary { op, right } => {

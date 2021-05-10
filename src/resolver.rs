@@ -1,4 +1,7 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    mem::replace,
+};
 
 use crate::{
     ast::*,
@@ -13,11 +16,18 @@ enum FunctionType {
     Method,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ClassType {
+    None,
+    Class,
+}
+
 #[derive(Debug)]
 pub struct Resolver<'a> {
     locals: &'a mut HashMap<Expr, usize>,
     scopes: Vec<HashMap<String, bool>>,
     current_function_type: FunctionType,
+    current_class_type: ClassType,
 }
 
 impl<'a> Resolver<'a> {
@@ -26,6 +36,7 @@ impl<'a> Resolver<'a> {
             locals,
             scopes: vec![],
             current_function_type: FunctionType::None,
+            current_class_type: ClassType::None,
         }
     }
 
@@ -58,7 +69,7 @@ impl<'a> Resolver<'a> {
         function: &Function,
         typ: FunctionType,
     ) -> ResolveResult<()> {
-        let enclosing = std::mem::replace(&mut self.current_function_type, typ);
+        let enclosing = replace(&mut self.current_function_type, typ);
 
         self.begin_scope();
         for param in &function.params {
@@ -121,11 +132,22 @@ impl<'a> Resolver<'a> {
                 self.end_scope();
             }
             Stmt::Class { name, methods } => {
+                let enclosing =
+                    replace(&mut self.current_class_type, ClassType::Class);
+
                 self.declare(name)?;
                 self.define(name)?;
+
+                self.begin_scope();
+                self.scopes.last_mut().unwrap().insert("this".into(), true);
+
                 for method in methods {
                     self.resolve_function(method, FunctionType::Method)?;
                 }
+
+                self.end_scope();
+
+                self.current_class_type = enclosing;
             }
             Stmt::Expression { expr } => self.visit_expr(expr)?,
             Stmt::Function(function) => {
@@ -197,6 +219,15 @@ impl<'a> Resolver<'a> {
             Expr::Set { object, value, .. } => {
                 self.visit_expr(value)?;
                 self.visit_expr(object)?;
+            }
+            Expr::This { keyword } => {
+                if matches!(self.current_class_type, ClassType::None) {
+                    return Err(ResolveError::new(
+                        Some(keyword.clone()),
+                        "Can't use 'this' outside of a class.",
+                    ));
+                }
+                self.resolve_local(expr, keyword)
             }
             Expr::Unary { right, .. } => self.visit_expr(right)?,
             Expr::Variable { name } => {

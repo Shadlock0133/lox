@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock, RwLockWriteGuard},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use crate::{
@@ -65,6 +65,10 @@ impl ValueRef {
 
     pub fn value(&self) -> Value {
         self.0.read().unwrap().clone()
+    }
+
+    pub fn get(&self) -> RwLockReadGuard<Value> {
+        self.0.read().unwrap()
     }
 
     pub fn get_mut(&self) -> RwLockWriteGuard<Value> {
@@ -155,14 +159,6 @@ pub enum Fun {
     Lox(LoxFunction),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct LoxFunction {
-    pub name: Box<Token>,
-    pub params: Vec<Token>,
-    pub body: Vec<crate::ast::Stmt>,
-    pub closure: Environment,
-}
-
 impl Fun {
     pub fn call(
         &mut self,
@@ -223,6 +219,31 @@ impl Hash for Fun {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct LoxFunction {
+    pub name: Box<Token>,
+    pub params: Vec<Token>,
+    pub body: Vec<crate::ast::Stmt>,
+    pub closure: Environment,
+}
+
+impl LoxFunction {
+    fn bind(&self, instance: &ValueRef) -> RuntimeResult<Self> {
+        if !instance.is_instance() {
+            return Err(RuntimeError::new(
+                Some(&*self.name),
+                "Trying to bind method without instance",
+            ));
+        }
+        let mut closure = self.closure.enclose();
+        closure.define("this".into(), instance.clone());
+        Ok(Self {
+            closure,
+            ..self.clone()
+        })
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Class {
     name: String,
     methods: BTreeMap<String, LoxFunction>,
@@ -258,14 +279,18 @@ impl Instance {
         }
     }
 
-    pub fn get(&self, name: &Token) -> RuntimeResult<ValueRef> {
+    pub fn get(
+        &self,
+        true_self: &ValueRef,
+        name: &Token,
+    ) -> RuntimeResult<ValueRef> {
         if let Some(field) = self.fields.get(&name.lexeme) {
             return Ok(field.clone());
         }
 
         if let Some(method) = self.class.find_method(&name) {
             return Ok(ValueRef::from_value(Value::Fun(Fun::Lox(
-                method.clone(),
+                method.bind(true_self)?,
             ))));
         }
 

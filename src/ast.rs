@@ -31,6 +31,9 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    This {
+        keyword: Token,
+    },
     Unary {
         op: Token,
         right: Box<Expr>,
@@ -91,6 +94,10 @@ impl Expr {
             name,
             value: Box::new(value),
         }
+    }
+
+    pub fn this(keyword: Token) -> Self {
+        Self::This { keyword }
     }
 
     pub fn unary(op: Token, right: Expr) -> Self {

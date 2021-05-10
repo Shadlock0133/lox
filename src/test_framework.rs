@@ -158,8 +158,7 @@ pub fn run_test(path: impl AsRef<Path>) -> Result<()> {
     run_test_without_prefix("", path)
 }
 
-const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] =
-    &["'<'", "'this'", "'super'", "initializer"];
+const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'<'", "'super'", "initializer"];
 
 fn run_test_without_prefix(
     prefix: impl AsRef<Path>,

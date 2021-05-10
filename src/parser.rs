@@ -442,6 +442,8 @@ impl Parser {
             Ok(Expr::literal(self.previous().literal.ok_or_else(|| {
                 self.error(self.peek(), "Missing literal.")
             })?))
+        } else if self.match_(&[This]) {
+            Ok(Expr::this(self.previous()))
         } else if self.match_(&[Identifier]) {
             Ok(Expr::variable(self.previous()))
         } else if self.match_(&[LeftParen]) {
