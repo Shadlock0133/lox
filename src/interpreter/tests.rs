@@ -112,7 +112,7 @@ fn scope_error() {
             }"
         )
         .to_string(),
-        "[line 3:21] Resolve Error at 'a': Variable already exists."
+        "[line 3:21] Resolve Error at 'a': Already variable with this name in this scope."
     );
 
     assert_eq!(

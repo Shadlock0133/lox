@@ -21,7 +21,7 @@ impl PartialEq for ValueRef {
             (Value::Instance(_), Value::Instance(_)) => {
                 Arc::ptr_eq(&self.0, &other.0)
             }
-            _ => self.0.read().unwrap().eq(&*other.0.read().unwrap()),
+            _ => self.get().eq(&*other.get()),
         }
     }
 }
@@ -30,7 +30,7 @@ impl Eq for ValueRef {}
 
 impl Hash for ValueRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.read().unwrap().hash(state)
+        self.get().hash(state)
     }
 }
 

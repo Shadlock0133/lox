@@ -1,4 +1,4 @@
-use std::{fs, io, path::Path, string::FromUtf8Error};
+use std::{fs, io, path::Path, string::FromUtf8Error, time::Instant};
 
 use crate::{
     errors::{ParseError, ResolveError, RuntimeError, TokenizerError},
@@ -11,7 +11,22 @@ use crate::{
 
 use anyhow::Result;
 
+macro_rules! term {
+    (GREEN) => {
+        "\x1b[32m"
+    };
+    (RED) => {
+        "\x1b[31m"
+    };
+    (RESET) => {
+        "\x1b[m"
+    };
+}
+const OK: &str = concat!(term!(GREEN), "ok", term!(RESET));
+const FAILED: &str = concat!(term!(RED), "FAILED", term!(RESET));
+
 const SKIP: &[&str] = &["benchmark", "expressions", "limit", "scanning"];
+const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'<'", "'super'", "initializer"];
 
 fn run_tests_rec(
     prefix: impl AsRef<Path>,
@@ -44,8 +59,16 @@ fn run_tests_rec(
 pub fn run_tests(dir: impl AsRef<Path>) -> Result<()> {
     let mut passes = 0;
     let mut fails = 0;
+    let timer = Instant::now();
     run_tests_rec(dir.as_ref(), dir.as_ref(), &mut passes, &mut fails)?;
-    eprintln!("successes: {}, fails: {}", passes, fails);
+    let result = if fails == 0 { OK } else { FAILED };
+    eprintln!(
+        "test result: {}. {} passed, {} failed; finished in {:?}",
+        result,
+        passes,
+        fails,
+        timer.elapsed()
+    );
     if fails == 0 {
         Ok(())
     } else {
@@ -158,8 +181,6 @@ pub fn run_test(path: impl AsRef<Path>) -> Result<()> {
     run_test_without_prefix("", path)
 }
 
-const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'<'", "'super'", "initializer"];
-
 fn run_test_without_prefix(
     prefix: impl AsRef<Path>,
     path: impl AsRef<Path>,
@@ -173,12 +194,12 @@ fn run_test_without_prefix(
     );
     let error = match test_handler(path) {
         Ok(()) => {
-            eprintln!("ok");
+            eprintln!("{}", OK);
             return Ok(());
         }
         Err(e) => e,
     };
-    eprintln!("failed");
+    eprintln!("{}", FAILED);
     match &error {
         TestError::Tokenizer(Some(expected), got) => {
             eprintln!("    expected tokenize error: {:?}", expected);
