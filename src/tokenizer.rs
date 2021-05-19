@@ -50,9 +50,13 @@ impl<'a> Tokenizer<'a> {
     }
 
     // TODO: Add quote escaping for fun and profit
-    fn string(&mut self) -> Option<&str> {
+    fn string(&mut self) -> Option<String> {
+        let mut output = String::new();
         if self.peek() != '"' {
             loop {
+                if self.peek() != '\r' {
+                    output.push(self.peek());
+                }
                 if self.peek() != '\\' && self.peek_next() == '"' {
                     self.advance();
                     break;
@@ -73,7 +77,7 @@ impl<'a> Tokenizer<'a> {
         }
 
         self.advance();
-        Some(&self.source[(self.start + 1)..(self.current - 1)])
+        Some(output)
     }
 
     fn number(&mut self) -> f64 {
@@ -195,8 +199,7 @@ impl<'a> Tokenizer<'a> {
             '"' => {
                 let string = self
                     .string()
-                    .ok_or(TokenizerError::UnterminatedString)?
-                    .to_owned();
+                    .ok_or(TokenizerError::UnterminatedString)?;
                 Ok(self.new_token(String, Some(Value::String(string))))
             }
             c if c.is_ascii_digit() => {
