@@ -149,16 +149,33 @@ impl Environment {
         distance: usize,
         name: &Token,
     ) -> RuntimeResult<ValueRef> {
+        self.get_at_raw(distance, &name.lexeme, Some(name))
+    }
+
+    pub fn get_at_str(
+        &self,
+        distance: usize,
+        name: &str,
+    ) -> RuntimeResult<ValueRef> {
+        self.get_at_raw(distance, name, None)
+    }
+
+    fn get_at_raw(
+        &self,
+        distance: usize,
+        name: &str,
+        token: Option<&Token>,
+    ) -> RuntimeResult<ValueRef> {
         self.ancestor(distance)
             .ok_or_else(|| {
-                RuntimeError::new(Some(name), "Non-existent env ancestor")
+                RuntimeError::new(token, "Non-existent env ancestor")
             })?
             .read()
             .values
-            .get(&name.lexeme)
+            .get(name)
             .ok_or_else(|| {
                 RuntimeError::new(
-                    Some(name),
+                    token,
                     format!("Missing variable at {} dist", distance),
                 )
             })

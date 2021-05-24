@@ -223,22 +223,35 @@ impl<'a> Interpreter<'a> {
                     .map(|e| self.visit_expr(e))
                     .collect::<Result<_, _>>()?;
 
+                let wrong_arity = |e| {
+                    Err(RuntimeError::new(
+                        Some(right_paren),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            e,
+                            arguments.len()
+                        ),
+                    ))
+                };
                 match callee.value() {
                     Value::Fun(mut f) if f.arity() == arguments.len() => {
                         f.call(self, &mut arguments)
                     }
-                    Value::Fun(f) => Err(RuntimeError::new(
-                        Some(right_paren),
-                        format!(
-                            "Expected {} arguments but got {}.",
-                            f.arity(),
-                            arguments.len()
-                        ),
-                    )),
-                    Value::Class(class) if arguments.is_empty() => {
-                        Ok(ValueRef::from_value(Value::Instance(
-                            Instance::new(class),
-                        )))
+                    Value::Fun(f) => wrong_arity(f.arity()),
+                    Value::Class(class) => {
+                        let instance = ValueRef::from_value(Value::Instance(
+                            Instance::new(class.clone()),
+                        ));
+                        match class.find_method("init") {
+                            Some(init) if init.arity() == arguments.len() => {
+                                init.bind(&instance)?
+                                    .call(self, &mut arguments)?;
+                                Ok(instance)
+                            }
+                            None if arguments.is_empty() => Ok(instance),
+                            Some(init) => wrong_arity(init.arity()),
+                            None => wrong_arity(0),
+                        }
                     }
                     _ => Err(RuntimeError::new(
                         Some(right_paren),
@@ -332,12 +345,10 @@ impl<'a> Interpreter<'a> {
 
                 let mut methods = BTreeMap::new();
                 for method in stmt_methods {
-                    let function = LoxFunction {
-                        name: Box::new(method.name.clone()),
-                        params: method.params.clone(),
-                        body: method.body.clone(),
-                        closure: self.current.clone(),
-                    };
+                    let closure = self.current.clone();
+                    let is_init = method.name.lexeme == "init";
+                    let function =
+                        LoxFunction::new(method.clone(), closure, is_init);
                     methods.insert(method.name.lexeme.clone(), function);
                 }
 
@@ -351,16 +362,13 @@ impl<'a> Interpreter<'a> {
 
             Stmt::Expression { expr } => self.visit_expr(expr).map(drop),
 
-            Stmt::Function(Function { name, params, body }) => {
+            Stmt::Function(declaration) => {
                 let closure = self.current.enclose();
-                let function =
-                    ValueRef::from_value(Value::Fun(Fun::Lox(LoxFunction {
-                        name: Box::new(name.clone()),
-                        body: body.clone(),
-                        params: params.clone(),
-                        closure,
-                    })));
-                self.current.define(name.lexeme.clone(), function);
+                let function = ValueRef::from_value(Value::Fun(Fun::Lox(
+                    LoxFunction::new(declaration.clone(), closure, false),
+                )));
+                self.current
+                    .define(declaration.name.lexeme.clone(), function);
                 Ok(())
             }
 

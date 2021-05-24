@@ -57,7 +57,7 @@ impl ControlFlow {
                 format!("Unexpected return: {}", value.value()),
             )),
             ControlFlow::Break => {
-                RuntimeError(GenericError(None, format!("Unexpected break")))
+                RuntimeError(GenericError(None, "Unexpected break".to_string()))
             }
             ControlFlow::Error(err) => err,
         }
@@ -89,8 +89,8 @@ pub type ParseResult<T> = Result<T, ParseError>;
 pub struct ResolveError(pub GenericError);
 
 impl ResolveError {
-    pub fn new(token: Option<Token>, msg: impl Into<String>) -> Self {
-        Self(GenericError(token, msg.into()))
+    pub fn new(token: Option<&Token>, msg: impl Into<String>) -> Self {
+        Self(GenericError(token.cloned(), msg.into()))
     }
 }
 

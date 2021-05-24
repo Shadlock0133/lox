@@ -13,6 +13,7 @@ use crate::{
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -89,7 +90,7 @@ impl<'a> Resolver<'a> {
             match scope.entry(name.lexeme.clone()) {
                 Entry::Occupied(_) => {
                     return Err(ResolveError::new(
-                        Some(name.clone()),
+                        Some(name),
                         "Already variable with this name in this scope.",
                     ))
                 }
@@ -107,7 +108,7 @@ impl<'a> Resolver<'a> {
                 Entry::Occupied(mut occupied) => {
                     if *occupied.get() {
                         return Err(ResolveError::new(
-                            Some(name.clone()),
+                            Some(name),
                             "Double define.",
                         ));
                     }
@@ -115,7 +116,7 @@ impl<'a> Resolver<'a> {
                 }
                 Entry::Vacant(_) => {
                     return Err(ResolveError::new(
-                        Some(name.clone()),
+                        Some(name),
                         "Defining undeclared variable.",
                     ))
                 }
@@ -142,7 +143,12 @@ impl<'a> Resolver<'a> {
                 self.scopes.last_mut().unwrap().insert("this".into(), true);
 
                 for method in methods {
-                    self.resolve_function(method, FunctionType::Method)?;
+                    let typ = if method.name.lexeme == "init" {
+                        FunctionType::Initializer
+                    } else {
+                        FunctionType::Method
+                    };
+                    self.resolve_function(method, typ)?;
                 }
 
                 self.end_scope();
@@ -172,11 +178,20 @@ impl<'a> Resolver<'a> {
             Stmt::Return { keyword, value } => {
                 if matches!(self.current_function_type, FunctionType::None) {
                     return Err(ResolveError::new(
-                        Some(keyword.clone()),
+                        Some(keyword),
                         "Can't return from top-level code.",
                     ));
                 }
                 if let Some(value) = value {
+                    if matches!(
+                        self.current_function_type,
+                        FunctionType::Initializer
+                    ) {
+                        return Err(ResolveError::new(
+                            Some(keyword),
+                            "Can't return a value from an initializer.",
+                        ));
+                    }
                     self.visit_expr(value)?;
                 }
             }
@@ -223,7 +238,7 @@ impl<'a> Resolver<'a> {
             Expr::This { keyword } => {
                 if matches!(self.current_class_type, ClassType::None) {
                     return Err(ResolveError::new(
-                        Some(keyword.clone()),
+                        Some(keyword),
                         "Can't use 'this' outside of a class.",
                     ));
                 }
@@ -239,7 +254,7 @@ impl<'a> Resolver<'a> {
                     .unwrap_or(false)
                 {
                     return Err(ResolveError::new(
-                        Some(name.clone()),
+                        Some(name),
                         "Can't read local variable in its own initializer.",
                     ));
                 }

@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::{
+    ast,
     environment::Environment,
     errors::{ControlFlow, RuntimeError, RuntimeResult},
     interpreter::Interpreter,
@@ -167,30 +168,14 @@ impl Fun {
     ) -> RuntimeResult<ValueRef> {
         match self {
             Self::Native { inner, .. } => (inner)(interpreter, arguments),
-            Self::Lox(LoxFunction {
-                params,
-                body,
-                closure,
-                ..
-            }) => {
-                let mut environment = closure.enclose();
-                for (param, arg) in params.iter().zip(arguments.iter()) {
-                    environment.define(param.lexeme.to_string(), arg.clone());
-                }
-                let result = interpreter.execute_block(body, environment);
-                match result {
-                    Ok(()) => Ok(ValueRef::nil()),
-                    Err(ControlFlow::Return(value)) => Ok(value),
-                    Err(err) => Err(err),
-                }
-            }
+            Self::Lox(f) => f.call(interpreter, arguments),
         }
     }
 
     pub fn arity(&self) -> usize {
         match self {
             Self::Native { arity, .. } => *arity,
-            Self::Lox(LoxFunction { params, .. }) => params.len(),
+            Self::Lox(f) => f.arity(),
         }
     }
 }
@@ -199,8 +184,8 @@ impl fmt::Debug for Fun {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Native { .. } => write!(f, "<native fn>"),
-            Self::Lox(LoxFunction { name, .. }) => {
-                write!(f, "<fn {}>", name.lexeme)
+            Self::Lox(LoxFunction { declaration, .. }) => {
+                write!(f, "<fn {}>", declaration.name.lexeme)
             }
         }
     }
@@ -220,17 +205,55 @@ impl Hash for Fun {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LoxFunction {
-    pub name: Box<Token>,
-    pub params: Vec<Token>,
-    pub body: Vec<crate::ast::Stmt>,
-    pub closure: Environment,
+    declaration: Box<ast::Function>,
+    closure: Environment,
+    is_init: bool,
 }
 
 impl LoxFunction {
-    fn bind(&self, instance: &ValueRef) -> RuntimeResult<Self> {
+    pub fn new(
+        declaration: ast::Function,
+        closure: Environment,
+        is_init: bool,
+    ) -> Self {
+        Self {
+            declaration: Box::new(declaration),
+            closure,
+            is_init,
+        }
+    }
+
+    pub fn call(
+        &mut self,
+        interpreter: &mut Interpreter,
+        arguments: &mut [ValueRef],
+    ) -> RuntimeResult<ValueRef> {
+        let mut environment = self.closure.enclose();
+        for (param, arg) in self.declaration.params.iter().zip(arguments.iter())
+        {
+            environment.define(param.lexeme.to_string(), arg.clone());
+        }
+        let result =
+            interpreter.execute_block(&mut self.declaration.body, environment);
+        match result {
+            Ok(()) if self.is_init => self.closure.get_at_str(0, "this"),
+            Ok(()) => Ok(ValueRef::nil()),
+            Err(ControlFlow::Return(_)) if self.is_init => {
+                self.closure.get_at_str(0, "this")
+            }
+            Err(ControlFlow::Return(value)) => Ok(value),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn arity(&self) -> usize {
+        self.declaration.params.len()
+    }
+
+    pub fn bind(&self, instance: &ValueRef) -> RuntimeResult<Self> {
         if !instance.is_instance() {
             return Err(RuntimeError::new(
-                Some(&*self.name),
+                Some(&self.declaration.name),
                 "Trying to bind method without instance",
             ));
         }
@@ -254,8 +277,8 @@ impl Class {
         Self { name, methods }
     }
 
-    fn find_method(&self, name: &Token) -> Option<&LoxFunction> {
-        self.methods.get(&name.lexeme)
+    pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {
+        self.methods.get(name)
     }
 }
 
@@ -288,7 +311,7 @@ impl Instance {
             return Ok(field.clone());
         }
 
-        if let Some(method) = self.class.find_method(&name) {
+        if let Some(method) = self.class.find_method(&name.lexeme) {
             return Ok(ValueRef::from_value(Value::Fun(Fun::Lox(
                 method.bind(true_self)?,
             ))));

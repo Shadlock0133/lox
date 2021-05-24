@@ -197,9 +197,8 @@ impl<'a> Tokenizer<'a> {
                 Ok(self.from_type(Whitespace))
             }
             '"' => {
-                let string = self
-                    .string()
-                    .ok_or(TokenizerError::UnterminatedString)?;
+                let string =
+                    self.string().ok_or(TokenizerError::UnterminatedString)?;
                 Ok(self.new_token(String, Some(Value::String(string))))
             }
             c if c.is_ascii_digit() => {
