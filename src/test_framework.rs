@@ -12,14 +12,17 @@ use crate::{
 use anyhow::Result;
 
 macro_rules! term {
+    (ESC) => {
+        "\x1b["
+    };
     (GREEN) => {
-        "\x1b[32m"
+        concat!(term!(ESC), "32m")
     };
     (RED) => {
-        "\x1b[31m"
+        concat!(term!(ESC), "31m")
     };
     (RESET) => {
-        "\x1b[m"
+        concat!(term!(ESC), "m")
     };
 }
 const OK: &str = concat!(term!(GREEN), "ok", term!(RESET));
@@ -95,9 +98,13 @@ fn run(tokens: Vec<Token>, output: &mut Vec<u8>) -> Result<(), RunError> {
     let mut resolver = Resolver::new(&mut interpreter.locals);
     resolver.resolve(&program)?;
 
+    // dbg!(&interpreter.locals);
+    
     interpreter
         .interpret(&mut program)
         .map_err(|x| x.into_error())?;
+    
+    // dbg!(&interpreter.global);
 
     drop(interpreter);
     Ok(())
@@ -167,13 +174,13 @@ pub enum TestError {
     Io(#[from] io::Error),
     #[error("Non Utf8 output: {0}")]
     NonUtf8Output(#[from] FromUtf8Error),
-    #[error("{0:?}, {1}")]
+    #[error("Tokenizer error: expected {0:?}, got {1}")]
     Tokenizer(Option<String>, TokenizerError),
-    #[error("{0:?}, {1}")]
+    #[error("Runtime error: expected {0:?}, got {1}")]
     Run(Option<String>, RunError),
-    #[error("{0}")]
+    #[error("Missing run error: {0:?}")]
     MissingRunError(String),
-    #[error("{0}, {1}")]
+    #[error("Wrong output: expected {0:?}, got {1:?}")]
     WrongOutput(String, String),
 }
 
