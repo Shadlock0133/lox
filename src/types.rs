@@ -19,7 +19,8 @@ pub struct ValueRef(Arc<RwLock<Value>>);
 impl PartialEq for ValueRef {
     fn eq(&self, other: &Self) -> bool {
         match (self.value(), other.value()) {
-            (Value::Instance(_), Value::Instance(_)) => {
+            (Value::Fun(_), Value::Fun(_))
+            | (Value::Instance(_), Value::Instance(_)) => {
                 Arc::ptr_eq(&self.0, &other.0)
             }
             _ => self.get().eq(&*other.get()),
