@@ -108,6 +108,29 @@ impl Environment {
         }
     }
 
+    pub fn assign_at(
+        &self,
+        distance: usize,
+        name: &Token,
+        value: ValueRef,
+    ) -> RuntimeResult<()> {
+        *self
+            .ancestor(distance)
+            .ok_or_else(|| {
+                RuntimeError::new(Some(name), "Non-existent env ancestor")
+            })?
+            .write()
+            .values
+            .get_mut(&name.lexeme)
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    Some(name),
+                    format!("Missing variable at {} dist", distance),
+                )
+            })? = value;
+        Ok(())
+    }
+
     pub fn get(&self, name: &Token) -> RuntimeResult<ValueRef> {
         if let Some(value) = self.read().values.get(&name.lexeme) {
             Ok(value.clone())

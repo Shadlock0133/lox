@@ -99,7 +99,8 @@ impl<'a> Interpreter<'a> {
         name: &Token,
         expr: &Expr,
     ) -> RuntimeResult<ValueRef> {
-        match self.locals.get(expr) {
+        let get = self.locals.get(expr);
+        match get {
             Some(&distance) => self.current.get_at(distance, name),
             None => self.global.get(name),
         }
@@ -108,8 +109,16 @@ impl<'a> Interpreter<'a> {
     fn visit_expr(&mut self, expr: &mut Expr) -> RuntimeResult<ValueRef> {
         match expr {
             Expr::Assign { name, value } => {
+                let name = name.clone();
                 let value = self.visit_expr(value)?;
-                self.current.assign(name, value.clone())?;
+                match self.locals.get(&expr) {
+                    Some(&distance) => self.current.assign_at(
+                        distance,
+                        &name,
+                        value.clone(),
+                    )?,
+                    None => self.global.assign(&name, value.clone())?,
+                }
                 Ok(value)
             }
 
