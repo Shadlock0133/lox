@@ -297,6 +297,36 @@ impl<'a> Interpreter<'a> {
                 }
             }
 
+            Expr::Super {
+                ref keyword,
+                ref method,
+            } => {
+                let distance = *self.locals.get(&expr).ok_or_else(|| {
+                    RuntimeError::new(Some(keyword), "Missing superclass")
+                })?;
+                let superclass = self.current.get_at_str(distance, "super")?;
+                let class = match superclass.value() {
+                    Value::Class(class) => class,
+                    _ => {
+                        return Err(RuntimeError::new(
+                            Some(keyword),
+                            "'super' is not a class",
+                        ))
+                    }
+                };
+                let object = self.current.get_at_str(distance - 1, "this")?;
+                let method = class
+                    .find_method(&method.lexeme)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            Some(method),
+                            format!("Undefined property '{}'.", method.lexeme),
+                        )
+                    })?
+                    .bind(&object)?;
+                Ok(ValueRef::from_value(Value::Fun(Fun::Lox(method))))
+            }
+
             Expr::This { keyword } => {
                 self.lookup_variable(&keyword.clone(), expr)
             }
@@ -343,23 +373,31 @@ impl<'a> Interpreter<'a> {
                 superclass,
                 methods: stmt_methods,
             } => {
-                let superclass = superclass
+                let has_superclass = superclass.is_some();
+                let (superclass_ref, superclass) = superclass
                     .as_ref()
                     .map(|superclass| {
                         let value = self.visit_expr(&mut Expr::variable(
                             superclass.clone(),
                         ))?;
                         match value.value() {
-                            Value::Class(class) => Ok(class),
+                            Value::Class(class) => Ok((value, class)),
                             _ => Err(RuntimeError::new(
                                 Some(superclass),
                                 "Superclass must be a class.",
                             )),
                         }
                     })
-                    .transpose()?;
+                    .transpose()?
+                    .map(|(r, s)| (Some(r), (Some(s))))
+                    .unwrap_or_default();
 
                 self.current.define(name.lexeme.clone(), ValueRef::nil());
+
+                if let Some(superclass_ref) = superclass_ref {
+                    self.current = self.current.enclose();
+                    self.current.define("super".to_string(), superclass_ref);
+                }
 
                 let mut methods = BTreeMap::new();
                 for method in stmt_methods {
@@ -372,6 +410,11 @@ impl<'a> Interpreter<'a> {
 
                 let class =
                     Class::new(name.lexeme.clone(), superclass, methods);
+
+                if has_superclass {
+                    self.current = self.current.enclosing().unwrap();
+                }
+
                 self.current.define(
                     name.lexeme.clone(),
                     ValueRef::from_value(Value::Class(class)),

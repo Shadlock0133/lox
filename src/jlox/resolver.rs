@@ -21,6 +21,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 #[derive(Debug)]
@@ -150,7 +151,15 @@ impl<'a> Resolver<'a> {
                             "A class can't inherit from itself.",
                         ));
                     }
+
+                    self.current_class_type = ClassType::Subclass;
                     self.visit_expr(&Expr::variable(superclass.clone()))?;
+
+                    self.begin_scope();
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert("super".to_owned(), true);
                 }
 
                 self.begin_scope();
@@ -166,6 +175,9 @@ impl<'a> Resolver<'a> {
                 }
 
                 self.end_scope();
+                if superclass.is_some() {
+                    self.end_scope();
+                }
 
                 self.current_class_type = enclosing;
             }
@@ -249,6 +261,21 @@ impl<'a> Resolver<'a> {
                 self.visit_expr(value)?;
                 self.visit_expr(object)?;
             }
+            Expr::Super { keyword, .. } => match self.current_class_type {
+                ClassType::None => {
+                    return Err(ResolveError::new(
+                        Some(keyword),
+                        "Can't use 'super' outside of a class.",
+                    ))
+                }
+                ClassType::Class => {
+                    return Err(ResolveError::new(
+                        Some(keyword),
+                        "Can't use 'super' in a class with no superclass.",
+                    ))
+                }
+                ClassType::Subclass => self.resolve_local(expr, keyword),
+            },
             Expr::This { keyword } => {
                 if matches!(self.current_class_type, ClassType::None) {
                     return Err(ResolveError::new(
@@ -272,7 +299,7 @@ impl<'a> Resolver<'a> {
                         "Can't read local variable in its own initializer.",
                     ));
                 }
-                self.resolve_local(expr, name);
+                self.resolve_local(expr, name)
             }
         }
         Ok(())

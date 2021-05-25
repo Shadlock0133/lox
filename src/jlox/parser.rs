@@ -440,27 +440,35 @@ impl Parser {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
-        if self.match_(&[False]) {
-            Ok(Expr::literal(Value::Bool(false)))
-        } else if self.match_(&[True]) {
-            Ok(Expr::literal(Value::Bool(true)))
-        } else if self.match_(&[Nil]) {
-            Ok(Expr::literal(Value::Nil))
-        } else if self.match_(&[Number, String]) {
-            Ok(Expr::literal(self.previous().literal.ok_or_else(|| {
-                self.error(self.peek(), "Missing literal.")
-            })?))
-        } else if self.match_(&[This]) {
-            Ok(Expr::this(self.previous()))
-        } else if self.match_(&[Identifier]) {
-            Ok(Expr::variable(self.previous()))
-        } else if self.match_(&[LeftParen]) {
-            let expr = self.expression()?;
-            self.consume(RightParen, "Expect ')' after expression.")?;
-            Ok(Expr::grouping(expr))
-        } else {
-            Err(self.error(self.peek(), "Expect expression."))
-        }
+        let expr =
+            if self.match_(&[False]) {
+                Expr::literal(Value::Bool(false))
+            } else if self.match_(&[True]) {
+                Expr::literal(Value::Bool(true))
+            } else if self.match_(&[Nil]) {
+                Expr::literal(Value::Nil)
+            } else if self.match_(&[Number, String]) {
+                Expr::literal(self.previous().literal.ok_or_else(|| {
+                    self.error(self.peek(), "Missing literal.")
+                })?)
+            } else if self.match_(&[Super]) {
+                let keyword = self.previous();
+                self.consume(Dot, "Expect '.' after 'super'.")?;
+                let method =
+                    self.consume(Identifier, "Expect superclass method name.")?;
+                Expr::super_(keyword, method)
+            } else if self.match_(&[This]) {
+                Expr::this(self.previous())
+            } else if self.match_(&[Identifier]) {
+                Expr::variable(self.previous())
+            } else if self.match_(&[LeftParen]) {
+                let expr = self.expression()?;
+                self.consume(RightParen, "Expect ')' after expression.")?;
+                Expr::grouping(expr)
+            } else {
+                return Err(self.error(self.peek(), "Expect expression."));
+            };
+        Ok(expr)
     }
 }
 

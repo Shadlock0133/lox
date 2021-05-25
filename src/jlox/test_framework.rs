@@ -29,7 +29,6 @@ const OK: &str = concat!(term!(GREEN), "ok", term!(RESET));
 const FAILED: &str = concat!(term!(RED), "FAILED", term!(RESET));
 
 const SKIP: &[&str] = &["benchmark", "expressions", "limit", "scanning"];
-const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'super'"];
 
 fn run_tests_rec(
     prefix: impl AsRef<Path>,
@@ -212,21 +211,11 @@ fn run_test_without_prefix(
             eprintln!("    tokenize error: {}", got)
         }
         TestError::Run(Some(expected), got) => {
-            let msg = got.to_string();
-            if UNIMPLEMENTED_CLASS_SYNTAX.iter().any(|x| msg.contains(x)) {
-                eprintln!("    unimplemented class syntax");
-            } else {
-                eprintln!("    expected error {:?}", expected);
-                eprintln!("    got {}", got);
-            }
+            eprintln!("    expected error {:?}", expected);
+            eprintln!("    got {}", got);
         }
         TestError::Run(None, got) => {
-            let msg = got.to_string();
-            if UNIMPLEMENTED_CLASS_SYNTAX.iter().any(|x| msg.contains(x)) {
-                eprintln!("    unimplemented class syntax");
-            } else {
-                eprintln!("    unexpected runtime error: {}", got);
-            }
+            eprintln!("    unexpected runtime error: {}", got);
         }
         TestError::MissingRunError(got) => {
             eprintln!("    expected failure: {:?}", got)

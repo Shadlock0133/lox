@@ -77,6 +77,10 @@ impl Environment {
         }
     }
 
+    pub fn enclosing(&self) -> Option<Self> {
+        self.read().enclosing.as_ref().cloned()
+    }
+
     fn read(&self) -> RwLockReadGuard<Inner> {
         self.inner.try_read().unwrap()
     }
