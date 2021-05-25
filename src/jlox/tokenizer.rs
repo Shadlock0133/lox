@@ -1,4 +1,4 @@
-use crate::{errors::TokenizerError, tokens::*, types::Value};
+use super::{errors::TokenizerError, tokens::*, types::Value};
 
 pub struct Tokenizer<'a> {
     source: &'a str,

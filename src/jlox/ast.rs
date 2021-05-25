@@ -1,4 +1,4 @@
-use crate::{tokens::Token, types::Value};
+use super::{tokens::Token, types::Value};
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Expr {

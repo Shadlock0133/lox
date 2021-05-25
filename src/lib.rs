@@ -1,27 +1,19 @@
-pub mod ast;
-pub mod environment;
-pub mod errors;
-pub mod interpreter;
-pub mod parser;
-pub mod resolver;
-pub mod test_framework;
-pub mod tokenizer;
-pub mod tokens;
-pub mod types;
+pub mod jlox;
 
 use std::{fs, path::Path};
 
-use crate::{
-    interpreter::*, parser::*, resolver::Resolver, tokenizer::*, tokens::*,
+use crate::jlox::{
+    errors::TokenizerError, interpreter::*, parser::*, resolver::Resolver,
+    tokenizer::*, tokens::*,
 };
 
 use anyhow::Result;
 
-pub struct Lox {
+pub struct JLox {
     interpreter: Interpreter<'static>,
 }
 
-impl Lox {
+impl JLox {
     pub fn new() -> Self {
         Self {
             interpreter: Interpreter::new(std::io::stdout()),
@@ -71,7 +63,7 @@ impl Lox {
         let tokenizer = Tokenizer::new(&source);
         let tokens: Vec<Token> = tokenizer
             .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
-            .collect::<std::result::Result<_, errors::TokenizerError>>()?;
+            .collect::<std::result::Result<_, TokenizerError>>()?;
 
         let mut parser = Parser::new(tokens);
         let mut program = parser.parse()?;

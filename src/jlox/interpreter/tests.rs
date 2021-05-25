@@ -1,19 +1,23 @@
-use crate::errors::ResolveError;
-
-use super::*;
+use super::{
+    super::{
+        errors::ResolveError, parser::Parser, resolver::Resolver,
+        tokenizer::Tokenizer,
+    },
+    *,
+};
 
 #[track_caller]
 fn run(x: &str) -> String {
-    let tokens = crate::tokenizer::Tokenizer::new(x)
+    let tokens = Tokenizer::new(x)
         .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+    let mut ast = Parser::new(tokens).parse().unwrap();
 
     let mut output = vec![];
     let mut interpreter = Interpreter::new(&mut output);
 
-    crate::resolver::Resolver::new(&mut interpreter.locals)
+    Resolver::new(&mut interpreter.locals)
         .resolve(&mut ast)
         .unwrap();
 
@@ -24,15 +28,15 @@ fn run(x: &str) -> String {
 
 #[track_caller]
 fn interpreter_error(x: &str) -> RuntimeError {
-    let tokens = crate::tokenizer::Tokenizer::new(x)
+    let tokens = Tokenizer::new(x)
         .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+    let mut ast = Parser::new(tokens).parse().unwrap();
 
     let mut output = vec![];
     let mut interpreter = Interpreter::new(&mut output);
-    crate::resolver::Resolver::new(&mut interpreter.locals)
+    Resolver::new(&mut interpreter.locals)
         .resolve(&mut ast)
         .unwrap();
 
@@ -42,15 +46,15 @@ fn interpreter_error(x: &str) -> RuntimeError {
 
 #[track_caller]
 fn resolver_error(x: &str) -> ResolveError {
-    let tokens = crate::tokenizer::Tokenizer::new(x)
+    let tokens = Tokenizer::new(x)
         .filter(|t| t.as_ref().map(|t| !t.can_skip()).unwrap_or(true))
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    let mut ast = crate::parser::Parser::new(tokens).parse().unwrap();
+    let mut ast = Parser::new(tokens).parse().unwrap();
 
     let mut output = vec![];
     let mut interpreter = Interpreter::new(&mut output);
-    crate::resolver::Resolver::new(&mut interpreter.locals)
+    Resolver::new(&mut interpreter.locals)
         .resolve(&mut ast)
         .unwrap_err()
 }

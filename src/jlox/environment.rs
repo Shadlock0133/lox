@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use crate::{
+use super::{
     errors::{RuntimeError, RuntimeResult},
     tokens::Token,
     types::ValueRef,

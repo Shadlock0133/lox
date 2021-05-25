@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path, string::FromUtf8Error, time::Instant};
 
-use crate::{
+use super::{
     errors::{ParseError, ResolveError, RuntimeError, TokenizerError},
     interpreter::*,
     parser::*,

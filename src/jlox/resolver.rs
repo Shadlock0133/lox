@@ -3,7 +3,7 @@ use std::{
     mem::replace,
 };
 
-use crate::{
+use super::{
     ast::*,
     errors::{ResolveError, ResolveResult},
     tokens::Token,

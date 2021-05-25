@@ -4,8 +4,8 @@ use anyhow::Result;
 use structopt::StructOpt;
 
 use lox::{
-    test_framework::{run_test, run_tests},
-    Lox,
+    jlox::test_framework::{run_test, run_tests},
+    JLox,
 };
 
 #[derive(StructOpt)]
@@ -18,7 +18,7 @@ struct Opt {
 fn main() -> Result<()> {
     let opt = Opt::from_args();
 
-    let mut lox = Lox::new();
+    let mut lox = JLox::new();
     match opt.input {
         Some(path) if opt.test && path.is_file() => run_test(path)?,
         Some(path) if opt.test && path.is_dir() => run_tests(path)?,

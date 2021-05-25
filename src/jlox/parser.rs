@@ -1,4 +1,4 @@
-use crate::{
+use super::{
     ast::*,
     errors::{ParseError, ParseResult},
     tokens::{
@@ -466,9 +466,10 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::tokenizer::Tokenizer;
-    use crate::tokens::TokenType;
+    use super::{
+        super::{tokenizer::Tokenizer, tokens::TokenType},
+        *,
+    };
 
     #[test]
     fn test() {

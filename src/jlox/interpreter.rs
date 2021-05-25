@@ -1,15 +1,16 @@
-use crate::{
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+    io::Write,
+    time::Instant,
+};
+
+use super::{
     ast::*,
     environment::Environment,
     errors::{ControlFlow, RuntimeError, RuntimeResult},
     tokens::{Token, TokenType},
     types::{Class, Fun, Instance, LoxFunction, Value, ValueRef},
-};
-use core::fmt;
-use std::{
-    collections::{BTreeMap, HashMap},
-    io::Write,
-    time::Instant,
 };
 
 pub struct Interpreter<'a> {

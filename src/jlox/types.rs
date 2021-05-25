@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use crate::{
+use super::{
     ast,
     environment::Environment,
     errors::{ControlFlow, RuntimeError, RuntimeResult},
@@ -290,11 +290,15 @@ impl Class {
     }
 
     pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {
-        self.methods.get(name).or_else(|| {
-            self.superclass
-                .as_ref()
-                .and_then(|superclass| superclass.find_method(name))
-        })
+        self.methods
+            .get(name)
+            .or_else(|| self.find_super_method(name))
+    }
+
+    fn find_super_method(&self, name: &str) -> Option<&LoxFunction> {
+        self.superclass
+            .as_ref()
+            .and_then(|superclass| superclass.find_method(name))
     }
 }
 
