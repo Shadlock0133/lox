@@ -115,6 +115,14 @@ impl Parser {
 
     fn class(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(Identifier, "Expect class name.")?;
+
+        let superclass = if self.match_(&[Less]) {
+            self.consume(Identifier, "Expect superclass name.")?;
+            Some(self.previous())
+        } else {
+            None
+        };
+
         self.consume(LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = vec![];
@@ -123,7 +131,7 @@ impl Parser {
         }
 
         self.consume(RightBrace, "Expect '}' after class body.")?;
-        Ok(Stmt::class(name, methods))
+        Ok(Stmt::class(name, superclass, methods))
     }
 
     fn function(&mut self, kind: &str) -> ParseResult<Function> {

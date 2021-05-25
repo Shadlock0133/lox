@@ -1,7 +1,0 @@
-- General Java-to-Rust differences.
-    `Option`, `Box`, `Rc<RefCell>`, `Result` instead of throwing,
-    and who knows what just to emulate OOP in Rust.
-    Ugly error reporting is ugly but works.
-- No new syntax node for logical expr. It got stuffed into binary expr.
-- TODO: Handle quote escaping ("\"") inside strings
-- TODO: Add break keyword

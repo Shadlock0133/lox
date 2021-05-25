@@ -132,12 +132,26 @@ impl<'a> Resolver<'a> {
                 self.resolve(statements)?;
                 self.end_scope();
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            } => {
                 let enclosing =
                     replace(&mut self.current_class_type, ClassType::Class);
 
                 self.declare(name)?;
                 self.define(name)?;
+
+                if let Some(superclass) = superclass {
+                    if superclass.lexeme == name.lexeme {
+                        return Err(ResolveError::new(
+                            Some(superclass),
+                            "A class can't inherit from itself.",
+                        ));
+                    }
+                    self.visit_expr(&Expr::variable(superclass.clone()))?;
+                }
 
                 self.begin_scope();
                 self.scopes.last_mut().unwrap().insert("this".into(), true);

@@ -119,6 +119,7 @@ pub enum Stmt {
     },
     Class {
         name: Token,
+        superclass: Option<Token>,
         methods: Vec<Function>,
     },
     Expression {
@@ -159,8 +160,16 @@ impl Stmt {
         Self::Block { statements }
     }
 
-    pub fn class(name: Token, methods: Vec<Function>) -> Self {
-        Self::Class { name, methods }
+    pub fn class(
+        name: Token,
+        superclass: Option<Token>,
+        methods: Vec<Function>,
+    ) -> Self {
+        Self::Class {
+            name,
+            superclass,
+            methods,
+        }
     }
 
     pub fn expression(expr: Expr) -> Self {

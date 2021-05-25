@@ -28,6 +28,7 @@ impl PartialEq for ValueRef {
     }
 }
 
+// Look `impl Eq for Value`
 impl Eq for ValueRef {}
 
 impl Hash for ValueRef {
@@ -99,6 +100,7 @@ impl PartialEq for Value {
     }
 }
 
+// Technically, this is a lie, but I don't care
 impl Eq for Value {}
 
 impl Hash for Value {
@@ -270,12 +272,21 @@ impl LoxFunction {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Class {
     name: String,
+    superclass: Option<Box<Class>>,
     methods: BTreeMap<String, LoxFunction>,
 }
 
 impl Class {
-    pub fn new(name: String, methods: BTreeMap<String, LoxFunction>) -> Self {
-        Self { name, methods }
+    pub fn new(
+        name: String,
+        superclass: Option<Class>,
+        methods: BTreeMap<String, LoxFunction>,
+    ) -> Self {
+        Self {
+            name,
+            superclass: superclass.map(Box::new),
+            methods,
+        }
     }
 
     pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {

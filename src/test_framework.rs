@@ -29,7 +29,7 @@ const OK: &str = concat!(term!(GREEN), "ok", term!(RESET));
 const FAILED: &str = concat!(term!(RED), "FAILED", term!(RESET));
 
 const SKIP: &[&str] = &["benchmark", "expressions", "limit", "scanning"];
-const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'<'", "'super'"];
+const UNIMPLEMENTED_CLASS_SYNTAX: &[&str] = &["'super'"];
 
 fn run_tests_rec(
     prefix: impl AsRef<Path>,

@@ -339,8 +339,25 @@ impl<'a> Interpreter<'a> {
 
             Stmt::Class {
                 name,
+                superclass,
                 methods: stmt_methods,
             } => {
+                let superclass = superclass
+                    .as_ref()
+                    .map(|superclass| {
+                        let value = self.visit_expr(&mut Expr::variable(
+                            superclass.clone(),
+                        ))?;
+                        match value.value() {
+                            Value::Class(class) => Ok(class),
+                            _ => Err(RuntimeError::new(
+                                Some(superclass),
+                                "Superclass must be a class.",
+                            )),
+                        }
+                    })
+                    .transpose()?;
+
                 self.current.define(name.lexeme.clone(), ValueRef::nil());
 
                 let mut methods = BTreeMap::new();
@@ -352,7 +369,8 @@ impl<'a> Interpreter<'a> {
                     methods.insert(method.name.lexeme.clone(), function);
                 }
 
-                let class = Class::new(name.lexeme.clone(), methods);
+                let class =
+                    Class::new(name.lexeme.clone(), superclass, methods);
                 self.current.define(
                     name.lexeme.clone(),
                     ValueRef::from_value(Value::Class(class)),
