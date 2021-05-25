@@ -290,7 +290,11 @@ impl Class {
     }
 
     pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {
-        self.methods.get(name)
+        self.methods.get(name).or_else(|| {
+            self.superclass
+                .as_ref()
+                .and_then(|superclass| superclass.find_method(name))
+        })
     }
 }
 

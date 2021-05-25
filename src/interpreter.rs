@@ -414,7 +414,7 @@ impl<'a> Interpreter<'a> {
                     .as_mut()
                     .map(|e| self.visit_expr(e))
                     .transpose()?
-                    .unwrap_or(ValueRef::nil()),
+                    .unwrap_or_else(ValueRef::nil),
             )),
 
             Stmt::Var { name, init } => {
@@ -422,7 +422,7 @@ impl<'a> Interpreter<'a> {
                     .as_mut()
                     .map(|e| self.visit_expr(e))
                     .transpose()?
-                    .unwrap_or(ValueRef::nil());
+                    .unwrap_or_else(ValueRef::nil);
                 self.current.define(name.lexeme.clone(), value);
                 Ok(())
             }
