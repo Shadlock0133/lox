@@ -16,7 +16,7 @@ fn simple_instruction(name: &str, offset: usize) -> usize {
 
 fn constant_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
     let index = chunk.code[offset + 1];
-    let constant = chunk.constants.values[index as usize];
+    let constant = &chunk.constants.values[index as usize];
     println!("{:16} {:4} '{:?}'", name, index, constant);
     offset + 2
 }
@@ -31,7 +31,7 @@ fn constant_long_instruction(
         bytes[i] = chunk.code[offset + i + 1];
     }
     let index = usize::from_le_bytes(bytes);
-    let constant = chunk.constants.values[index as usize];
+    let constant = &chunk.constants.values[index as usize];
     println!("{:16} {:4} '{:?}'", name, index, constant);
     offset + 4
 }
@@ -50,11 +50,20 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
         Opcode::CONSTANT_LONG => {
             constant_long_instruction("OP_CONSTANT_LONG", chunk, offset)
         }
+        Opcode::NIL => simple_instruction("OP_NIL", offset),
+        Opcode::TRUE => simple_instruction("OP_TRUE", offset),
+        Opcode::FALSE => simple_instruction("OP_FALSE", offset),
+
+        Opcode::EQUAL => simple_instruction("OP_EQUAL", offset),
+        Opcode::GREATER => simple_instruction("OP_GREATER", offset),
+        Opcode::LESS => simple_instruction("OP_LESS", offset),
         Opcode::ADD => simple_instruction("OP_ADD", offset),
         Opcode::SUBSTRACT => simple_instruction("OP_SUBSTRACT", offset),
         Opcode::MULTIPLY => simple_instruction("OP_MULTIPLY", offset),
         Opcode::DIVIDE => simple_instruction("OP_DIVIDE", offset),
+        Opcode::NOT => simple_instruction("OP_NOT", offset),
         Opcode::NEGATE => simple_instruction("OP_NEGATE", offset),
+
         Opcode::RETURN => simple_instruction("OP_RETURN", offset),
         _ => {
             println!("Unknown opcode {}", instruction);

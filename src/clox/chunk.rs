@@ -16,11 +16,18 @@ opcodes!(
     pub enum Opcode {
         Constant(CONSTANT),
         ConstantLong(CONSTANT_LONG),
+        Nil(NIL),
+        True(TRUE),
+        False(FALSE),
 
+        Equal(EQUAL),
+        Greater(GREATER),
+        Less(LESS),
         Add(ADD),
         Substract(SUBSTRACT),
         Multiply(MULTIPLY),
         Divide(DIVIDE),
+        Not(NOT),
         Negate(NEGATE),
 
         Return(RETURN),

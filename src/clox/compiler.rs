@@ -15,8 +15,8 @@ pub enum Error {
     ParserError(#[from] TokenError),
     #[error("Multiple errors: {0:?}")]
     MultipleErrors(Vec<Error>),
-    #[error("None error")]
-    NoneError,
+    #[error("Unexpected EOF")]
+    UnexpectedEof,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -35,17 +35,20 @@ impl fmt::Display for TokenError {
 pub fn compile(source: &str) -> Result<Chunk, Error> {
     let mut chunk = Chunk::default();
     let mut parser = Parser::new(&source, &mut chunk);
-    if parser.expression().is_some() {
-        let line = parser.last_line;
-        chunk.write(Opcode::RETURN, line);
-        Ok(chunk)
-    } else {
-        let e = match parser.errors.len() {
-            0 => Error::NoneError,
-            1 => parser.errors.remove(0),
-            _ => Error::MultipleErrors(parser.errors),
-        };
-        Err(e)
+    match parser.expression() {
+        Ok(()) => {
+            let line = parser.last_line;
+            chunk.write(Opcode::RETURN, line);
+            Ok(chunk)
+        }
+        Err(()) => {
+            let e = match parser.errors.len() {
+                0 => Error::UnexpectedEof,
+                1 => parser.errors.remove(0),
+                _ => Error::MultipleErrors(parser.errors),
+            };
+            Err(e)
+        }
     }
 }
 
@@ -90,7 +93,7 @@ impl Precedence {
     }
 }
 
-type ParseFn<'s, 'c> = fn(&mut Parser<'s, 'c>) -> Option<()>;
+type ParseFn<'s, 'c> = fn(&mut Parser<'s, 'c>) -> Result<(), ()>;
 
 struct Rule<'s, 'c> {
     prefix: Option<ParseFn<'s, 'c>>,
@@ -116,44 +119,44 @@ impl<'s, 'c> Rule<'s, 'c> {
 fn get_rule<'s, 'c>(type_: TokenType) -> Rule<'s, 'c> {
     use {Parser as P, Precedence::*, TokenType as TT};
     match type_ {
-        TT::LeftParen    => Rule::new(Some(P::grouping), None, Zero),
-        TT::RightParen   => Rule::new(None, None, Zero),
-        TT::LeftBrace    => Rule::new(None, None, Zero),
-        TT::RightBrace   => Rule::new(None, None, Zero),
-        TT::Comma        => Rule::new(None, None, Zero),
-        TT::Dot          => Rule::new(None, None, Zero),
-        TT::Minus        => Rule::new(Some(P::unary), Some(P::binary), Term),
-        TT::Plus         => Rule::new(None, Some(P::binary), Term),
-        TT::Semicolon    => Rule::new(None, None, Zero),
-        TT::Slash        => Rule::new(None, Some(P::binary), Factor),
-        TT::Star         => Rule::new(None, Some(P::binary), Factor),
-        TT::Bang         => Rule::new(None, None, Zero),
-        TT::BangEqual    => Rule::new(None, None, Zero),
-        TT::Equal        => Rule::new(None, None, Zero),
-        TT::EqualEqual   => Rule::new(None, None, Zero),
-        TT::Greater      => Rule::new(None, None, Zero),
-        TT::GreaterEqual => Rule::new(None, None, Zero),
-        TT::Less         => Rule::new(None, None, Zero),
-        TT::LessEqual    => Rule::new(None, None, Zero),
-        TT::Identifier   => Rule::new(None, None, Zero),
-        TT::String       => Rule::new(None, None, Zero),
-        TT::Number       => Rule::new(Some(P::number), None, Zero),
-        TT::And          => Rule::new(None, None, Zero),
-        TT::Class        => Rule::new(None, None, Zero),
-        TT::Else         => Rule::new(None, None, Zero),
-        TT::False        => Rule::new(None, None, Zero),
-        TT::For          => Rule::new(None, None, Zero),
-        TT::Fun          => Rule::new(None, None, Zero),
-        TT::If           => Rule::new(None, None, Zero),
-        TT::Nil          => Rule::new(None, None, Zero),
-        TT::Or           => Rule::new(None, None, Zero),
-        TT::Print        => Rule::new(None, None, Zero),
-        TT::Return       => Rule::new(None, None, Zero),
-        TT::Super        => Rule::new(None, None, Zero),
-        TT::This         => Rule::new(None, None, Zero),
-        TT::True         => Rule::new(None, None, Zero),
-        TT::Var          => Rule::new(None, None, Zero),
-        TT::While        => Rule::new(None, None, Zero),
+        TT::LeftParen    => Rule::new(Some(P::grouping),            None, Zero),
+        TT::RightParen   => Rule::new(             None,            None, Zero),
+        TT::LeftBrace    => Rule::new(             None,            None, Zero),
+        TT::RightBrace   => Rule::new(             None,            None, Zero),
+        TT::Comma        => Rule::new(             None,            None, Zero),
+        TT::Dot          => Rule::new(             None,            None, Zero),
+        TT::Minus        => Rule::new(   Some(P::unary), Some(P::binary), Term),
+        TT::Plus         => Rule::new(             None, Some(P::binary), Term),
+        TT::Semicolon    => Rule::new(             None,            None, Zero),
+        TT::Slash        => Rule::new(             None, Some(P::binary), Factor),
+        TT::Star         => Rule::new(             None, Some(P::binary), Factor),
+        TT::Bang         => Rule::new(   Some(P::unary),            None, Zero),
+        TT::BangEqual    => Rule::new(             None, Some(P::binary), Equality),
+        TT::Equal        => Rule::new(             None,            None, Zero),
+        TT::EqualEqual   => Rule::new(             None, Some(P::binary), Equality),
+        TT::Greater      => Rule::new(             None, Some(P::binary), Comparison),
+        TT::GreaterEqual => Rule::new(             None, Some(P::binary), Comparison),
+        TT::Less         => Rule::new(             None, Some(P::binary), Comparison),
+        TT::LessEqual    => Rule::new(             None, Some(P::binary), Comparison),
+        TT::Identifier   => Rule::new(             None,            None, Zero),
+        TT::String       => Rule::new(             None,            None, Zero),
+        TT::Number       => Rule::new(  Some(P::number),            None, Zero),
+        TT::And          => Rule::new(             None,            None, Zero),
+        TT::Class        => Rule::new(             None,            None, Zero),
+        TT::Else         => Rule::new(             None,            None, Zero),
+        TT::False        => Rule::new( Some(P::literal),            None, Zero),
+        TT::For          => Rule::new(             None,            None, Zero),
+        TT::Fun          => Rule::new(             None,            None, Zero),
+        TT::If           => Rule::new(             None,            None, Zero),
+        TT::Nil          => Rule::new( Some(P::literal),            None, Zero),
+        TT::Or           => Rule::new(             None,            None, Zero),
+        TT::Print        => Rule::new(             None,            None, Zero),
+        TT::Return       => Rule::new(             None,            None, Zero),
+        TT::Super        => Rule::new(             None,            None, Zero),
+        TT::This         => Rule::new(             None,            None, Zero),
+        TT::True         => Rule::new( Some(P::literal),            None, Zero),
+        TT::Var          => Rule::new(             None,            None, Zero),
+        TT::While        => Rule::new(             None,            None, Zero),
     }
 }
 
@@ -166,6 +169,12 @@ impl<'s, 'c> Parser<'s, 'c> {
             errors: vec![],
             synchronizing: false,
             last_line: 0,
+        }
+    }
+
+    fn emit(&mut self, bytes: &[u8], line: usize) {
+        for &byte in bytes {
+            self.chunk.write(byte, line);
         }
     }
 
@@ -213,54 +222,75 @@ impl<'s, 'c> Parser<'s, 'c> {
         }
     }
 
-    fn number(&mut self) -> Option<()> {
-        let token = self.consume(TokenType::Number, "Expect a number.")?;
+    fn number(&mut self) -> Result<(), ()> {
+        let token = self.advance().unwrap();
         let line = token.line;
-        let value = token
-            .lexeme
-            .parse::<f64>()
-            .map_err(|e| {
-                let error = TokenError(token.to_owned(), e.to_string());
-                self.error(error.into())
-            })
-            .ok()?;
-        self.chunk.write_constant(Value(value), line);
-        Some(())
+        let value = token.lexeme.parse::<f64>().map_err(|e| {
+            let error = TokenError(token.to_owned(), e.to_string());
+            self.error(error.into());
+        })?;
+        self.chunk.write_constant(Value::number(value), line);
+        Ok(())
     }
 
-    fn grouping(&mut self) -> Option<()> {
-        self.consume(TokenType::LeftParen, "Expect '(' before grouping.")?;
+    fn literal(&mut self) -> Result<(), ()> {
+        let token = self.advance().unwrap();
+        match token.type_ {
+            TokenType::Nil => self.chunk.write(Opcode::NIL, token.line),
+            TokenType::True => self.chunk.write(Opcode::TRUE, token.line),
+            TokenType::False => self.chunk.write(Opcode::FALSE, token.line),
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    fn grouping(&mut self) -> Result<(), ()> {
+        self.advance().unwrap();
         self.expression()?;
-        self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
-        Some(())
+        self.consume(TokenType::RightParen, "Expect ')' after expression.")
+            .ok_or(())?;
+        Ok(())
     }
 
-    fn unary(&mut self) -> Option<()> {
-        let token = self.advance()?;
+    fn unary(&mut self) -> Result<(), ()> {
+        let token = self.advance().unwrap();
         self.parse_precedence(Precedence::Call)?;
         match token.type_ {
+            TokenType::Bang => self.chunk.write(Opcode::NOT, token.line),
             TokenType::Minus => self.chunk.write(Opcode::NEGATE, token.line),
-            _ => return None,
+            _ => return Err(()),
         }
-        Some(())
+        Ok(())
     }
 
-    fn binary(&mut self) -> Option<()> {
-        let op = self.advance()?;
+    fn binary(&mut self) -> Result<(), ()> {
+        let op = self.advance().unwrap();
         let rule = get_rule(op.type_);
         self.parse_precedence(rule.precedence.left_assoc())?;
         match op.type_ {
+            TokenType::BangEqual => {
+                self.emit(&[Opcode::EQUAL, Opcode::NOT], op.line)
+            }
+            TokenType::EqualEqual => self.emit(&[Opcode::EQUAL], op.line),
+            TokenType::Greater => self.emit(&[Opcode::GREATER], op.line),
+            TokenType::GreaterEqual => {
+                self.emit(&[Opcode::LESS, Opcode::NOT], op.line)
+            }
+            TokenType::Less => self.emit(&[Opcode::LESS], op.line),
+            TokenType::LessEqual => {
+                self.emit(&[Opcode::GREATER, Opcode::NOT], op.line)
+            }
             TokenType::Plus => self.chunk.write(Opcode::ADD, op.line),
             TokenType::Minus => self.chunk.write(Opcode::SUBSTRACT, op.line),
             TokenType::Star => self.chunk.write(Opcode::MULTIPLY, op.line),
             TokenType::Slash => self.chunk.write(Opcode::DIVIDE, op.line),
-            _ => return None,
+            _ => return Err(()),
         }
-        Some(())
+        Ok(())
     }
 
-    fn parse_precedence(&mut self, precedence: Precedence) -> Option<()> {
-        let token = self.peek()?;
+    fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), ()> {
+        let token = self.peek().ok_or(())?;
         match get_rule(token.type_).prefix {
             Some(f) => f(self)?,
             None => {
@@ -268,14 +298,14 @@ impl<'s, 'c> Parser<'s, 'c> {
                 self.errors.push(
                     TokenError(token, "Expect expression".to_string()).into(),
                 );
-                return None;
+                return Err(());
             }
         }
 
         loop {
             let token = match self.peek() {
                 Some(t) => t,
-                None => break
+                None => break,
             };
             let rule = get_rule(token.type_);
             if precedence > rule.precedence {
@@ -287,10 +317,10 @@ impl<'s, 'c> Parser<'s, 'c> {
             }
         }
 
-        Some(())
+        Ok(())
     }
 
-    fn expression(&mut self) -> Option<()> {
+    fn expression(&mut self) -> Result<(), ()> {
         self.parse_precedence(Precedence::Assignment)
     }
 }
