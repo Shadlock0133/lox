@@ -66,6 +66,9 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
 
     pub fn interpret(&mut self) -> InterpretResult {
         self.state.ip = 0;
+        if self.debug {
+            debug::disassembly_chunk(self.chunk, "code");
+        }
         loop {
             if self.debug {
                 println!("{:?}", self.state.stack);

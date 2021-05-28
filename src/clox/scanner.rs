@@ -53,6 +53,17 @@ pub struct Token<'s> {
     pub line: usize,
 }
 
+impl Token<'_> {
+    pub fn to_owned(self) -> Token<'static> {
+        let Token { type_, lexeme, line } = self;
+        Token {
+            type_,
+            lexeme: lexeme.into_owned().into(),
+            line,
+        }
+    }
+}
+
 pub struct Scanner<'s> {
     source: &'s str,
     start: usize,
@@ -81,6 +92,14 @@ impl Error {
     }
 }
 
+impl<'s> Iterator for Scanner<'s> {
+    type Item = Result<Token<'s>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next().transpose()
+    }
+}
+
 impl<'s> Scanner<'s> {
     pub fn new(source: &'s str) -> Self {
         Self {
@@ -91,7 +110,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    pub fn next(&mut self) -> Result<Option<Token>, Error> {
+    fn next(&mut self) -> Result<Option<Token<'s>>, Error> {
         self.skip_whitespace();
         self.start = self.current;
         let c = match self.advance() {
@@ -151,11 +170,11 @@ impl<'s> Scanner<'s> {
         Ok(Some(token))
     }
 
-    fn lexeme(&self) -> &str {
+    fn lexeme(&self) -> &'s str {
         &self.source[self.start..self.current]
     }
 
-    fn token(&self, type_: TokenType) -> Token {
+    fn token(&self, type_: TokenType) -> Token<'s> {
         Token {
             type_,
             lexeme: self.lexeme().into(),
@@ -211,7 +230,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn string(&mut self) -> Result<Token, Error> {
+    fn string(&mut self) -> Result<Token<'s>, Error> {
         while self.peek().filter(|x| *x != '"').is_some() {
             if self.peek() == Some('\n') {
                 self.line += 1;
@@ -226,7 +245,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn number(&mut self) -> Token {
+    fn number(&mut self) -> Token<'s> {
         while matches!(self.peek(), Some('0'..='9')) {
             self.advance();
         }
@@ -241,7 +260,7 @@ impl<'s> Scanner<'s> {
         self.token(TokenType::Number)
     }
 
-    fn identifier(&mut self) -> Token {
+    fn identifier(&mut self) -> Token<'s> {
         while self
             .peek()
             .filter(|x| x.is_ascii_alphanumeric() || *x == '_')
