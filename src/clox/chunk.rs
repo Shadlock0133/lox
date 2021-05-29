@@ -31,7 +31,7 @@ opcodes!(
         Greater(GREATER),
         Less(LESS),
         Add(ADD),
-        Substract(SUBSTRACT),
+        Subtract(SUBTRACT),
         Multiply(MULTIPLY),
         Divide(DIVIDE),
         Not(NOT),
@@ -44,32 +44,18 @@ opcodes!(
 #[derive(Default)]
 pub struct Chunk {
     pub(super) code: Vec<u8>,
-    line_lens: Vec<u8>,
-    lines: Vec<usize>,
+    lines: Lines,
     pub(super) constants: ValueArray,
 }
 
 impl Chunk {
     pub fn write(&mut self, byte: u8, line: usize) {
         self.code.push(byte);
-        match self.line_lens.last_mut().zip(self.lines.last_mut()) {
-            Some((len, line_no)) if *len < 255 && line == *line_no => *len += 1,
-            _ => {
-                self.line_lens.push(1);
-                self.lines.push(line);
-            }
-        }
+        self.lines.push(line);
     }
 
     pub fn get_line(&self, offset: usize) -> Option<usize> {
-        let mut counter = 0usize;
-        for (len, line) in self.line_lens.iter().zip(&self.lines) {
-            if (counter..counter + *len as usize).contains(&offset) {
-                return Some(*line);
-            }
-            counter += *len as usize;
-        }
-        None
+        self.lines.get_line(offset)
     }
 
     pub fn add_constant(&mut self, value: Value) -> usize {
@@ -95,5 +81,34 @@ impl Chunk {
         } else {
             panic!("index too big for constant: {}", index);
         }
+    }
+}
+
+#[derive(Default)]
+struct Lines {
+    line_lens: Vec<u8>,
+    lines: Vec<usize>,
+}
+
+impl Lines {
+    pub fn push(&mut self, line: usize) {
+        match self.line_lens.last_mut().zip(self.lines.last_mut()) {
+            Some((len, line_no)) if *len < 255 && line == *line_no => *len += 1,
+            _ => {
+                self.line_lens.push(1);
+                self.lines.push(line);
+            }
+        }
+    }
+
+    pub fn get_line(&self, offset: usize) -> Option<usize> {
+        let mut counter = 0usize;
+        for (len, line) in self.line_lens.iter().zip(&self.lines) {
+            if (counter..counter + *len as usize).contains(&offset) {
+                return Some(*line);
+            }
+            counter += *len as usize;
+        }
+        None
     }
 }

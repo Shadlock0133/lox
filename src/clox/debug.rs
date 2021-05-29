@@ -9,12 +9,24 @@ pub fn disassembly_chunk(chunk: &Chunk, name: &str) {
     }
 }
 
-fn simple_instruction(name: &str, offset: usize) -> usize {
+fn bytes(chunk: &Chunk, offset: usize, size: usize) {
+    for i in 0..4 {
+        if i < size {
+            print!("{:02x} ", chunk.code[offset + i]);
+        } else {
+            print!("   ");
+        }
+    }
+}
+
+fn simple_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    bytes(chunk, offset, 1);
     println!("{}", name);
     offset + 1
 }
 
 fn constant_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    bytes(chunk, offset, 2);
     let index = chunk.code[offset + 1];
     let constant = &chunk.constants.values[index as usize];
     println!("{:16} {:4} '{:?}'", name, index, constant);
@@ -26,6 +38,7 @@ fn constant_long_instruction(
     chunk: &Chunk,
     offset: usize,
 ) -> usize {
+    bytes(chunk, offset, 4);
     let mut bytes = [0; std::mem::size_of::<usize>()];
     for i in 0..3 {
         bytes[i] = chunk.code[offset + i + 1];
@@ -52,21 +65,27 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
         Some(Opcode::ConstantLong) => {
             constant_long_instruction("OP_CONSTANT_LONG", chunk, offset)
         }
-        Some(Opcode::Nil) => simple_instruction("OP_NIL", offset),
-        Some(Opcode::True) => simple_instruction("OP_TRUE", offset),
-        Some(Opcode::False) => simple_instruction("OP_FALSE", offset),
+        Some(Opcode::Nil) => simple_instruction("OP_NIL", chunk, offset),
+        Some(Opcode::True) => simple_instruction("OP_TRUE", chunk, offset),
+        Some(Opcode::False) => simple_instruction("OP_FALSE", chunk, offset),
 
-        Some(Opcode::Equal) => simple_instruction("OP_EQUAL", offset),
-        Some(Opcode::Greater) => simple_instruction("OP_GREATER", offset),
-        Some(Opcode::Less) => simple_instruction("OP_LESS", offset),
-        Some(Opcode::Add) => simple_instruction("OP_ADD", offset),
-        Some(Opcode::Substract) => simple_instruction("OP_SUBSTRACT", offset),
-        Some(Opcode::Multiply) => simple_instruction("OP_MULTIPLY", offset),
-        Some(Opcode::Divide) => simple_instruction("OP_DIVIDE", offset),
-        Some(Opcode::Not) => simple_instruction("OP_NOT", offset),
-        Some(Opcode::Negate) => simple_instruction("OP_NEGATE", offset),
+        Some(Opcode::Equal) => simple_instruction("OP_EQUAL", chunk, offset),
+        Some(Opcode::Greater) => {
+            simple_instruction("OP_GREATER", chunk, offset)
+        }
+        Some(Opcode::Less) => simple_instruction("OP_LESS", chunk, offset),
+        Some(Opcode::Add) => simple_instruction("OP_ADD", chunk, offset),
+        Some(Opcode::Subtract) => {
+            simple_instruction("OP_SUBSTRACT", chunk, offset)
+        }
+        Some(Opcode::Multiply) => {
+            simple_instruction("OP_MULTIPLY", chunk, offset)
+        }
+        Some(Opcode::Divide) => simple_instruction("OP_DIVIDE", chunk, offset),
+        Some(Opcode::Not) => simple_instruction("OP_NOT", chunk, offset),
+        Some(Opcode::Negate) => simple_instruction("OP_NEGATE", chunk, offset),
 
-        Some(Opcode::Return) => simple_instruction("OP_RETURN", offset),
+        Some(Opcode::Return) => simple_instruction("OP_RETURN", chunk, offset),
         None => {
             println!("Unknown opcode {}", instruction);
             offset + 1

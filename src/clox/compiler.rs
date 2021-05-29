@@ -281,7 +281,7 @@ impl<'s, 'c> Parser<'s, 'c> {
                 self.emit(&[Opcode::GREATER, Opcode::NOT], op.line)
             }
             TokenType::Plus => self.chunk.write(Opcode::ADD, op.line),
-            TokenType::Minus => self.chunk.write(Opcode::SUBSTRACT, op.line),
+            TokenType::Minus => self.chunk.write(Opcode::SUBTRACT, op.line),
             TokenType::Star => self.chunk.write(Opcode::MULTIPLY, op.line),
             TokenType::Slash => self.chunk.write(Opcode::DIVIDE, op.line),
             _ => return Err(()),

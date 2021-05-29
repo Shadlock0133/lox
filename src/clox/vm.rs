@@ -140,7 +140,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 Some(Opcode::Add) => {
                     self.bin_op(|l, r| Value::number(l + r))?
                 }
-                Some(Opcode::Substract) => {
+                Some(Opcode::Subtract) => {
                     self.bin_op(|l, r| Value::number(l - r))?
                 }
                 Some(Opcode::Multiply) => {
