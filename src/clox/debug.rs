@@ -45,27 +45,29 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
     }
 
     let instruction = chunk.code[offset];
-    match instruction {
-        Opcode::CONSTANT => constant_instruction("OP_CONSTANT", chunk, offset),
-        Opcode::CONSTANT_LONG => {
+    match Opcode::check(instruction) {
+        Some(Opcode::Constant) => {
+            constant_instruction("OP_CONSTANT", chunk, offset)
+        }
+        Some(Opcode::ConstantLong) => {
             constant_long_instruction("OP_CONSTANT_LONG", chunk, offset)
         }
-        Opcode::NIL => simple_instruction("OP_NIL", offset),
-        Opcode::TRUE => simple_instruction("OP_TRUE", offset),
-        Opcode::FALSE => simple_instruction("OP_FALSE", offset),
+        Some(Opcode::Nil) => simple_instruction("OP_NIL", offset),
+        Some(Opcode::True) => simple_instruction("OP_TRUE", offset),
+        Some(Opcode::False) => simple_instruction("OP_FALSE", offset),
 
-        Opcode::EQUAL => simple_instruction("OP_EQUAL", offset),
-        Opcode::GREATER => simple_instruction("OP_GREATER", offset),
-        Opcode::LESS => simple_instruction("OP_LESS", offset),
-        Opcode::ADD => simple_instruction("OP_ADD", offset),
-        Opcode::SUBSTRACT => simple_instruction("OP_SUBSTRACT", offset),
-        Opcode::MULTIPLY => simple_instruction("OP_MULTIPLY", offset),
-        Opcode::DIVIDE => simple_instruction("OP_DIVIDE", offset),
-        Opcode::NOT => simple_instruction("OP_NOT", offset),
-        Opcode::NEGATE => simple_instruction("OP_NEGATE", offset),
+        Some(Opcode::Equal) => simple_instruction("OP_EQUAL", offset),
+        Some(Opcode::Greater) => simple_instruction("OP_GREATER", offset),
+        Some(Opcode::Less) => simple_instruction("OP_LESS", offset),
+        Some(Opcode::Add) => simple_instruction("OP_ADD", offset),
+        Some(Opcode::Substract) => simple_instruction("OP_SUBSTRACT", offset),
+        Some(Opcode::Multiply) => simple_instruction("OP_MULTIPLY", offset),
+        Some(Opcode::Divide) => simple_instruction("OP_DIVIDE", offset),
+        Some(Opcode::Not) => simple_instruction("OP_NOT", offset),
+        Some(Opcode::Negate) => simple_instruction("OP_NEGATE", offset),
 
-        Opcode::RETURN => simple_instruction("OP_RETURN", offset),
-        _ => {
+        Some(Opcode::Return) => simple_instruction("OP_RETURN", offset),
+        None => {
             println!("Unknown opcode {}", instruction);
             offset + 1
         }

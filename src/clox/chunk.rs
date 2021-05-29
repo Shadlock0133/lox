@@ -8,6 +8,13 @@ macro_rules! opcodes {
 
         impl $name {
             $($vis const $const: u8 = $name::$variant as u8;)*
+
+            $vis fn check(value: u8) -> Option<Self> {
+                match value {
+                    $(Self::$const => Some(Self::$variant),)*
+                    _ => None,
+                }
+            }
         }
     };
 }

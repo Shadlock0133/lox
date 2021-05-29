@@ -105,19 +105,21 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 debug::disassembly_instruction(self.chunk, self.state.ip);
             }
             let instruction = self.read_byte();
-            match instruction {
-                Opcode::CONSTANT => {
+            match Opcode::check(instruction) {
+                Some(Opcode::Constant) => {
                     let constant = self.read_constant();
                     self.state.stack.push(constant);
                 }
-                Opcode::CONSTANT_LONG => {
+                Some(Opcode::ConstantLong) => {
                     let constant = self.read_constant_long();
                     self.state.stack.push(constant);
                 }
-                Opcode::NIL => self.state.stack.push(Value::nil()),
-                Opcode::TRUE => self.state.stack.push(Value::bool(true)),
-                Opcode::FALSE => self.state.stack.push(Value::bool(false)),
-                Opcode::EQUAL => {
+                Some(Opcode::Nil) => self.state.stack.push(Value::nil()),
+                Some(Opcode::True) => self.state.stack.push(Value::bool(true)),
+                Some(Opcode::False) => {
+                    self.state.stack.push(Value::bool(false))
+                }
+                Some(Opcode::Equal) => {
                     let b = self.state.stack.pop();
                     let a = self.state.stack.pop();
                     match (a, b) {
@@ -131,15 +133,23 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                         }
                     }
                 }
-                Opcode::GREATER => self.bin_op(|l, r| Value::bool(l > r))?,
-                Opcode::LESS => self.bin_op(|l, r| Value::bool(l < r))?,
-                Opcode::ADD => self.bin_op(|l, r| Value::number(l + r))?,
-                Opcode::SUBSTRACT => {
+                Some(Opcode::Greater) => {
+                    self.bin_op(|l, r| Value::bool(l > r))?
+                }
+                Some(Opcode::Less) => self.bin_op(|l, r| Value::bool(l < r))?,
+                Some(Opcode::Add) => {
+                    self.bin_op(|l, r| Value::number(l + r))?
+                }
+                Some(Opcode::Substract) => {
                     self.bin_op(|l, r| Value::number(l - r))?
                 }
-                Opcode::MULTIPLY => self.bin_op(|l, r| Value::number(l * r))?,
-                Opcode::DIVIDE => self.bin_op(|l, r| Value::number(l / r))?,
-                Opcode::NOT => {
+                Some(Opcode::Multiply) => {
+                    self.bin_op(|l, r| Value::number(l * r))?
+                }
+                Some(Opcode::Divide) => {
+                    self.bin_op(|l, r| Value::number(l / r))?
+                }
+                Some(Opcode::Not) => {
                     let value = self.state.stack.pop();
                     match value {
                         Some(value) => self
@@ -153,7 +163,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                         }
                     }
                 }
-                Opcode::NEGATE => {
+                Some(Opcode::Negate) => {
                     let value = self.state.stack.pop();
                     match value {
                         Some(Value::Number(Number(value))) => {
@@ -171,11 +181,11 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                         }
                     }
                 }
-                Opcode::RETURN => {
+                Some(Opcode::Return) => {
                     println!("{:?}", self.state.stack.pop().unwrap());
                     return Ok(());
                 }
-                _ => return Err(self.runtime_error("Unimplemented opcode")),
+                None => return Err(self.runtime_error("Unimplemented opcode")),
             }
         }
     }
