@@ -139,7 +139,7 @@ fn get_rule<'s, 'c>(type_: TokenType) -> Rule<'s, 'c> {
         TT::Less         => Rule::new(             None, Some(P::binary), Comparison),
         TT::LessEqual    => Rule::new(             None, Some(P::binary), Comparison),
         TT::Identifier   => Rule::new(             None,            None,       Zero),
-        TT::String       => Rule::new(             None,            None,       Zero),
+        TT::String       => Rule::new(  Some(P::string),            None,       Zero),
         TT::Number       => Rule::new(  Some(P::number),            None,       Zero),
         TT::And          => Rule::new(             None,            None,       Zero),
         TT::Class        => Rule::new(             None,            None,       Zero),
@@ -230,6 +230,13 @@ impl<'s, 'c> Parser<'s, 'c> {
             self.error(error.into());
         })?;
         self.chunk.write_constant(Value::number(value), line);
+        Ok(())
+    }
+
+    fn string(&mut self) -> Result<(), ()> {
+        let token = self.advance().unwrap();
+        let string = token.lexeme[1..token.lexeme.len() - 1].to_string();
+        self.chunk.write_constant(Value::string(string), token.line);
         Ok(())
     }
 

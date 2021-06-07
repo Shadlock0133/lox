@@ -1,7 +1,9 @@
+use crate::clox::value::Obj;
+
 use super::{
     chunk::{Chunk, Opcode},
     debug,
-    value::{Number, Value},
+    value::Value,
 };
 
 pub struct Vm<'chunk, 'state> {
@@ -72,10 +74,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
         let b = self.state.stack.pop();
         let a = self.state.stack.pop();
         match (a, b) {
-            (
-                Some(Value::Number(Number(a))),
-                Some(Value::Number(Number(b))),
-            ) => {
+            (Some(Value::Number(a)), Some(Value::Number(b))) => {
                 self.state.stack.push(op(a, b));
                 Ok(())
             }
@@ -138,7 +137,25 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 }
                 Some(Opcode::Less) => self.bin_op(|l, r| Value::bool(l < r))?,
                 Some(Opcode::Add) => {
-                    self.bin_op(|l, r| Value::number(l + r))?
+                    let b = self.state.stack.pop();
+                    let a = self.state.stack.pop();
+                    match (a, b) {
+                        (Some(Value::Number(a)), Some(Value::Number(b))) => {
+                            self.state.stack.push(Value::number(a + b))
+                        }
+                        (Some(Value::Obj(a)), Some(Value::Obj(b))) => {
+                            match (*a, *b) {
+                                (Obj::String(a), Obj::String(b)) => {
+                                    self.state.stack.push(Value::string(a + &b))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(self.runtime_error(
+                                "Operands must be two numbers or two strings.",
+                            ))
+                        }
+                    }
                 }
                 Some(Opcode::Subtract) => {
                     self.bin_op(|l, r| Value::number(l - r))?
@@ -166,7 +183,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 Some(Opcode::Negate) => {
                     let value = self.state.stack.pop();
                     match value {
-                        Some(Value::Number(Number(value))) => {
+                        Some(Value::Number(value)) => {
                             self.state.stack.push(Value::number(-value));
                         }
                         Some(_) => {

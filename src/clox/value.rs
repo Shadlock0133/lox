@@ -1,15 +1,16 @@
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Value {
     Bool(bool),
     Nil,
-    Number(Number),
+    Number(f64),
+    Obj(Box<Obj>),
 }
 
 impl Value {
     pub fn number(value: f64) -> Self {
-        Self::Number(Number(value))
+        Self::Number(value)
     }
 
     pub fn bool(value: bool) -> Self {
@@ -18,6 +19,10 @@ impl Value {
 
     pub fn nil() -> Self {
         Self::Nil
+    }
+
+    pub fn string(value: String) -> Self {
+        Self::Obj(Box::new(Obj::String(value)))
     }
 
     pub fn is_falsey(&self) -> bool {
@@ -31,22 +36,34 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Nil, Value::Nil) => true,
             (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::Obj(a), Value::Obj(b)) => a == b,
             _ => false,
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub struct Number(pub f64);
-
-impl fmt::Debug for Number {
+impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.abs().log10() <= 6.0 {
-            write!(f, "{}", self.0)
-        } else {
-            write!(f, "{:e}", self.0)
+        match self {
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Nil => write!(f, "nil"),
+            Value::Number(n) => {
+                if n.abs().log2() <= 20.0 {
+                    write!(f, "{}", n)
+                } else {
+                    write!(f, "{:e}", n)
+                }
+            }
+            Value::Obj(o) => match o.as_ref() {
+                Obj::String(s) => write!(f, "{}", s),
+            },
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Obj {
+    String(String),
 }
 
 #[derive(Default)]
