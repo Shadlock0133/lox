@@ -54,7 +54,7 @@ pub struct Token<'s> {
 }
 
 impl Token<'_> {
-    pub fn to_owned(self) -> Token<'static> {
+    pub fn into_owned(self) -> Token<'static> {
         let Token {
             type_,
             lexeme,

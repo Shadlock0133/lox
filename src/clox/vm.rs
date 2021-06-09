@@ -1,5 +1,3 @@
-use crate::clox::value::Obj;
-
 use super::{
     chunk::{Chunk, Opcode},
     debug,
@@ -63,8 +61,8 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
 
     fn read_constant_long(&mut self) -> Value {
         let mut bytes = [0; std::mem::size_of::<usize>()];
-        for i in 0..3 {
-            bytes[i] = self.read_byte();
+        for b in &mut bytes[..3] {
+            *b = self.read_byte();
         }
         let index = usize::from_le_bytes(bytes);
         self.chunk.constants.values[index].clone()
@@ -139,21 +137,20 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 Some(Opcode::Add) => {
                     let b = self.state.stack.pop();
                     let a = self.state.stack.pop();
-                    match (a, b) {
-                        (Some(Value::Number(a)), Some(Value::Number(b))) => {
-                            self.state.stack.push(Value::number(a + b))
-                        }
-                        (Some(Value::Obj(a)), Some(Value::Obj(b))) => {
-                            match (*a, *b) {
-                                (Obj::String(a), Obj::String(b)) => {
-                                    self.state.stack.push(Value::string(a + &b))
-                                }
-                            }
-                        }
-                        _ => {
+                    if let (Some(Value::Number(a)), Some(Value::Number(b))) =
+                        (&a, &b)
+                    {
+                        self.state.stack.push(Value::number(a + b))
+                    } else if let (Some(a), Some(b)) = (
+                        a.and_then(|v| v.into_string()),
+                        b.and_then(|v| v.into_string()),
+                    ) {
+                        self.state.stack.push(Value::string(a + &b))
+                    } else {
+                        {
                             return Err(self.runtime_error(
                                 "Operands must be two numbers or two strings.",
-                            ))
+                            ));
                         }
                     }
                 }

@@ -215,7 +215,7 @@ impl<'s, 'c> Parser<'s, 'c> {
             Some(token)
         } else {
             self.error(Error::ParserError(TokenError(
-                token.to_owned(),
+                token.into_owned(),
                 message.to_string(),
             )));
             None
@@ -226,7 +226,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         let token = self.advance().unwrap();
         let line = token.line;
         let value = token.lexeme.parse::<f64>().map_err(|e| {
-            let error = TokenError(token.to_owned(), e.to_string());
+            let error = TokenError(token.into_owned(), e.to_string());
             self.error(error.into());
         })?;
         self.chunk.write_constant(Value::number(value), line);
@@ -301,7 +301,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         match get_rule(token.type_).prefix {
             Some(f) => f(self)?,
             None => {
-                let token = token.clone().to_owned();
+                let token = token.clone().into_owned();
                 self.errors.push(
                     TokenError(token, "Expect expression".to_string()).into(),
                 );
@@ -309,18 +309,13 @@ impl<'s, 'c> Parser<'s, 'c> {
             }
         }
 
-        loop {
-            let token = match self.peek() {
-                Some(t) => t,
-                None => break,
-            };
+        while let Some(token) = self.peek() {
             let rule = get_rule(token.type_);
             if precedence > rule.precedence {
                 break;
             }
-            match rule.infix {
-                Some(f) => f(self)?,
-                None => {}
+            if let Some(f) = rule.infix {
+                f(self)?
             }
         }
 
