@@ -115,48 +115,64 @@ impl<'s, 'c> Rule<'s, 'c> {
     }
 }
 
-#[rustfmt::skip]
 fn get_rule<'s, 'c>(type_: TokenType) -> Rule<'s, 'c> {
-    use {Parser as P, Precedence::*, TokenType as TT};
-    match type_ {
-        TT::LeftParen    => Rule::new(Some(P::grouping),            None,       Zero),
-        TT::RightParen   => Rule::new(             None,            None,       Zero),
-        TT::LeftBrace    => Rule::new(             None,            None,       Zero),
-        TT::RightBrace   => Rule::new(             None,            None,       Zero),
-        TT::Comma        => Rule::new(             None,            None,       Zero),
-        TT::Dot          => Rule::new(             None,            None,       Zero),
-        TT::Minus        => Rule::new(   Some(P::unary), Some(P::binary),       Term),
-        TT::Plus         => Rule::new(             None, Some(P::binary),       Term),
-        TT::Semicolon    => Rule::new(             None,            None,       Zero),
-        TT::Slash        => Rule::new(             None, Some(P::binary),     Factor),
-        TT::Star         => Rule::new(             None, Some(P::binary),     Factor),
-        TT::Bang         => Rule::new(   Some(P::unary),            None,       Zero),
-        TT::BangEqual    => Rule::new(             None, Some(P::binary),   Equality),
-        TT::Equal        => Rule::new(             None,            None,       Zero),
-        TT::EqualEqual   => Rule::new(             None, Some(P::binary),   Equality),
-        TT::Greater      => Rule::new(             None, Some(P::binary), Comparison),
-        TT::GreaterEqual => Rule::new(             None, Some(P::binary), Comparison),
-        TT::Less         => Rule::new(             None, Some(P::binary), Comparison),
-        TT::LessEqual    => Rule::new(             None, Some(P::binary), Comparison),
-        TT::Identifier   => Rule::new(             None,            None,       Zero),
-        TT::String       => Rule::new(  Some(P::string),            None,       Zero),
-        TT::Number       => Rule::new(  Some(P::number),            None,       Zero),
-        TT::And          => Rule::new(             None,            None,       Zero),
-        TT::Class        => Rule::new(             None,            None,       Zero),
-        TT::Else         => Rule::new(             None,            None,       Zero),
-        TT::False        => Rule::new( Some(P::literal),            None,       Zero),
-        TT::For          => Rule::new(             None,            None,       Zero),
-        TT::Fun          => Rule::new(             None,            None,       Zero),
-        TT::If           => Rule::new(             None,            None,       Zero),
-        TT::Nil          => Rule::new( Some(P::literal),            None,       Zero),
-        TT::Or           => Rule::new(             None,            None,       Zero),
-        TT::Print        => Rule::new(             None,            None,       Zero),
-        TT::Return       => Rule::new(             None,            None,       Zero),
-        TT::Super        => Rule::new(             None,            None,       Zero),
-        TT::This         => Rule::new(             None,            None,       Zero),
-        TT::True         => Rule::new( Some(P::literal),            None,       Zero),
-        TT::Var          => Rule::new(             None,            None,       Zero),
-        TT::While        => Rule::new(             None,            None,       Zero),
+    macro_rules! pratt_rules {
+        (match $type:expr;
+        $( $pat:ident => ( $prefix:ident, $infix:ident, $prec:ident ) ,)* ) => {
+            match $type {
+                $(
+                    TokenType::$pat => Rule::new(
+                        pratt_rules!(@fix $prefix),
+                        pratt_rules!(@fix $infix),
+                        Precedence::$prec
+                    )
+                ),*
+            }
+        };
+        (@fix None) => { None };
+        (@fix $f:ident) => { Some(Parser::$f) };
+    }
+
+    #[rustfmt::skip]
+    pratt_rules!{match type_;
+        LeftParen    => (   grouping,       None,       Zero),
+        RightParen   => (       None,       None,       Zero),
+        LeftBrace    => (       None,       None,       Zero),
+        RightBrace   => (       None,       None,       Zero),
+        Comma        => (       None,       None,       Zero),
+        Dot          => (       None,       None,       Zero),
+        Minus        => (      unary,     binary,       Term),
+        Plus         => (       None,     binary,       Term),
+        Semicolon    => (       None,       None,       Zero),
+        Slash        => (       None,     binary,     Factor),
+        Star         => (       None,     binary,     Factor),
+        Bang         => (      unary,       None,       Zero),
+        BangEqual    => (       None,     binary,   Equality),
+        Equal        => (       None,       None,       Zero),
+        EqualEqual   => (       None,     binary,   Equality),
+        Greater      => (       None,     binary, Comparison),
+        GreaterEqual => (       None,     binary, Comparison),
+        Less         => (       None,     binary, Comparison),
+        LessEqual    => (       None,     binary, Comparison),
+        Identifier   => (       None,       None,       Zero),
+        String       => (     string,       None,       Zero),
+        Number       => (     number,       None,       Zero),
+        And          => (       None,       None,       Zero),
+        Class        => (       None,       None,       Zero),
+        Else         => (       None,       None,       Zero),
+        False        => (    literal,       None,       Zero),
+        For          => (       None,       None,       Zero),
+        Fun          => (       None,       None,       Zero),
+        If           => (       None,       None,       Zero),
+        Nil          => (    literal,       None,       Zero),
+        Or           => (       None,       None,       Zero),
+        Print        => (       None,       None,       Zero),
+        Return       => (       None,       None,       Zero),
+        Super        => (       None,       None,       Zero),
+        This         => (       None,       None,       Zero),
+        True         => (    literal,       None,       Zero),
+        Var          => (       None,       None,       Zero),
+        While        => (       None,       None,       Zero),
     }
 }
 
