@@ -2,7 +2,7 @@ use core::fmt;
 use std::iter::Peekable;
 
 use super::{
-    chunk::{Chunk, Opcode},
+    chunk::{Chunk, ConstantIndex, Opcode},
     scanner::{self, Scanner, Token, TokenType},
     value::Value,
 };
@@ -385,17 +385,17 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
-    fn identifier_constant(&mut self, name: Token) -> usize {
+    fn identifier_constant(&mut self, name: Token) -> ConstantIndex {
         self.chunk
             .add_constant(Value::string(name.lexeme.into_owned()))
     }
 
-    fn parse_variable(&mut self, error_msg: &str) -> Result<usize, ()> {
+    fn parse_variable(&mut self, error_msg: &str) -> Result<ConstantIndex, ()> {
         let token = self.consume(TokenType::Identifier, error_msg).ok_or(())?;
         Ok(self.identifier_constant(token))
     }
 
-    fn define_variable(&mut self, global: usize, token: &Token) {
+    fn define_variable(&mut self, global: ConstantIndex, token: &Token) {
         self.chunk.define_global(global, token.line)
     }
 

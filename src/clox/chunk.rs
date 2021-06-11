@@ -54,6 +54,9 @@ pub struct Chunk {
     pub(super) constants: ValueArray,
 }
 
+#[derive(Clone, Copy)]
+pub struct ConstantIndex(usize);
+
 impl Chunk {
     pub fn write(&mut self, byte: u8, line: usize) {
         self.code.push(byte);
@@ -64,23 +67,24 @@ impl Chunk {
         self.lines.get_line(offset)
     }
 
-    pub fn add_constant(&mut self, value: Value) -> usize {
+    pub fn add_constant(&mut self, value: Value) -> ConstantIndex {
         let position = self.constants.values.iter().position(|x| *x == value);
-        if let Some(i) = position {
+        ConstantIndex(if let Some(i) = position {
             i
         } else {
             self.constants.write(value);
             self.constants.values.len() - 1
-        }
+        })
     }
 
     fn write_op_with_constant(
         &mut self,
         op_short: u8,
         op_long: u8,
-        constant: usize,
+        constant: ConstantIndex,
         line: usize,
     ) {
+        let ConstantIndex(constant) = constant;
         if constant <= 0xff {
             self.write(op_short, line);
             self.write(constant as u8, line);
@@ -94,7 +98,11 @@ impl Chunk {
         }
     }
 
-    pub fn write_constant(&mut self, value: Value, line: usize) -> usize {
+    pub fn write_constant(
+        &mut self,
+        value: Value,
+        line: usize,
+    ) -> ConstantIndex {
         let index = self.add_constant(value);
         self.write_op_with_constant(
             Opcode::CONSTANT,
@@ -105,7 +113,7 @@ impl Chunk {
         index
     }
 
-    pub fn define_global(&mut self, name: usize, line: usize) {
+    pub fn define_global(&mut self, name: ConstantIndex, line: usize) {
         self.write_op_with_constant(
             Opcode::DEFINE_GLOBAL,
             Opcode::DEFINE_GLOBAL_LONG,
@@ -114,7 +122,7 @@ impl Chunk {
         );
     }
 
-    pub fn get_global(&mut self, name: usize, line: usize) {
+    pub fn get_global(&mut self, name: ConstantIndex, line: usize) {
         self.write_op_with_constant(
             Opcode::GET_GLOBAL,
             Opcode::GET_GLOBAL_LONG,
