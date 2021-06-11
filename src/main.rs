@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use anyhow::Result;
 use structopt::StructOpt;
 
-use lox::{CLox, JLox};
+use lox::{CLox, JLox, Lox};
 
 enum Backend {
     JLox,
