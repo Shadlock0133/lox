@@ -114,8 +114,8 @@ impl CLox {
 impl Lox for CLox {
     fn interpret(&mut self, source: String) -> Result<()> {
         let chunk = compile(&source)?;
-        let mut vm = Vm::new(&chunk, &mut self.state, self.debug);
-        vm.interpret()?;
+        let mut vm = Vm::new(&chunk, &mut self.state);
+        vm.interpret(self.debug)?;
         Ok(())
     }
 }

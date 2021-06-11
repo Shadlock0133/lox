@@ -16,7 +16,12 @@ fn simple_test() {
     assert!(table.insert(hola.clone(), mundo.clone()));
     assert!(table.insert(hello.clone(), world.clone()));
 
-    assert!(table.get(&hello).unwrap().clone().into_string().is_some());
+    assert!(table
+        .get(&hello)
+        .unwrap()
+        .clone()
+        .into_obj_string()
+        .is_some());
     assert_eq!(table.get(&hello), Some(&world));
     assert_eq!(table.get(&hola), Some(&mundo));
 

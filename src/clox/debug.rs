@@ -68,6 +68,19 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
         Some(Opcode::Nil) => simple_instruction("OP_NIL", chunk, offset),
         Some(Opcode::True) => simple_instruction("OP_TRUE", chunk, offset),
         Some(Opcode::False) => simple_instruction("OP_FALSE", chunk, offset),
+        Some(Opcode::Pop) => simple_instruction("OP_POP", chunk, offset),
+        Some(Opcode::GetGlobal) => {
+            constant_instruction("OP_GET_GLOBAL", chunk, offset)
+        }
+        Some(Opcode::GetGlobalLong) => {
+            constant_long_instruction("OP_GET_GLOBAL_LONG", chunk, offset)
+        }
+        Some(Opcode::DefineGlobal) => {
+            constant_instruction("OP_DEFINE_GLOBAL", chunk, offset)
+        }
+        Some(Opcode::DefineGlobalLong) => {
+            constant_long_instruction("OP_DEFINE_GLOBAL_LONG", chunk, offset)
+        }
 
         Some(Opcode::Equal) => simple_instruction("OP_EQUAL", chunk, offset),
         Some(Opcode::Greater) => {
@@ -85,6 +98,7 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
         Some(Opcode::Not) => simple_instruction("OP_NOT", chunk, offset),
         Some(Opcode::Negate) => simple_instruction("OP_NEGATE", chunk, offset),
 
+        Some(Opcode::Print) => simple_instruction("OP_PRINT", chunk, offset),
         Some(Opcode::Return) => simple_instruction("OP_RETURN", chunk, offset),
         None => {
             println!("Unknown opcode {}", instruction);

@@ -29,13 +29,17 @@ impl Value {
         matches!(self, Self::Nil | Self::Bool(false))
     }
 
-    pub fn into_string(self) -> Option<String> {
+    pub fn into_obj_string(self) -> Option<ObjString> {
         match self {
             Value::Obj(o) => match *o {
-                Obj::ObjString(ObjString(s, _)) => Some(s.into_string()),
+                Obj::ObjString(s) => Some(s),
             },
             _ => None,
         }
+    }
+
+    pub fn into_string(self) -> Option<String> {
+        self.into_obj_string().map(|s| s.0.into_string())
     }
 }
 

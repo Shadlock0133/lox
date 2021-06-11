@@ -1,19 +1,20 @@
 use super::{
     chunk::{Chunk, Opcode},
     debug,
+    table::Table,
     value::Value,
 };
 
 pub struct Vm<'chunk, 'state> {
     chunk: &'chunk Chunk,
     state: &'state mut VmState,
-    debug: bool,
+    ip: usize,
+    stack: Vec<Value>,
 }
 
 #[derive(Default)]
 pub struct VmState {
-    ip: usize,
-    stack: Vec<Value>,
+    globals: Table<Value>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -34,24 +35,25 @@ impl Error {
     }
 }
 
-type Result = std::result::Result<(), Error>;
+type Result<T = ()> = std::result::Result<T, Error>;
+
+enum ControlFlow {
+    Return,
+}
 
 impl<'chunk, 'state> Vm<'chunk, 'state> {
-    pub fn new(
-        chunk: &'chunk Chunk,
-        state: &'state mut VmState,
-        debug: bool,
-    ) -> Self {
+    pub fn new(chunk: &'chunk Chunk, state: &'state mut VmState) -> Self {
         Self {
             chunk,
             state,
-            debug,
+            ip: 0,
+            stack: vec![],
         }
     }
 
     fn read_byte(&mut self) -> u8 {
-        let byte = self.chunk.code[self.state.ip];
-        self.state.ip += 1;
+        let byte = self.chunk.code[self.ip];
+        self.ip += 1;
         byte
     }
 
@@ -68,139 +70,157 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
         self.chunk.constants.values[index].clone()
     }
 
+    fn push(&mut self, value: Value) {
+        self.stack.push(value)
+    }
+
+    fn pop(&mut self) -> Result<Value> {
+        self.stack
+            .pop()
+            .ok_or_else(|| self.runtime_error("Missing operand on stack"))
+    }
+
+    fn get_global(&mut self, name: Value) -> Result {
+        if let Some(name) = name.into_obj_string() {
+            match self.state.globals.get(&name) {
+                Some(value) => {
+                    let value = value.clone();
+                    self.push(value);
+                    Ok(())
+                }
+                None => Err(self
+                    .runtime_error(format!("Undefined variable {}", name.0))),
+            }
+        } else {
+            Err(self.runtime_error("Global name isn't a string."))
+        }
+    }
+
+    fn define_global(&mut self, name: Value) -> Result {
+        let value = self.pop()?;
+        if let Some(name) = name.into_obj_string() {
+            self.state.globals.insert(name, value);
+            Ok(())
+        } else {
+            Err(self.runtime_error("Global name isn't a string."))
+        }
+    }
+
     fn bin_op(&mut self, op: impl Fn(f64, f64) -> Value) -> Result {
-        let b = self.state.stack.pop();
-        let a = self.state.stack.pop();
+        let b = self.pop()?;
+        let a = self.pop()?;
         match (a, b) {
-            (Some(Value::Number(a)), Some(Value::Number(b))) => {
-                self.state.stack.push(op(a, b));
+            (Value::Number(a), Value::Number(b)) => {
+                self.push(op(a, b));
                 Ok(())
             }
-            (Some(_), Some(_)) => {
-                Err(self.runtime_error("Operands must be numbers."))
-            }
-            (None, Some(_)) => {
-                Err(self.runtime_error("Missing operand on stack"))
-            }
-            _ => Err(self.runtime_error("Missing operands on stack")),
+            _ => Err(self.runtime_error("Operands must be numbers.")),
         }
     }
 
     fn runtime_error(&self, msg: impl AsRef<str>) -> Error {
-        let line = self.chunk.get_line(self.state.ip - 1).unwrap_or(0);
+        let line = self.chunk.get_line(self.ip - 1).unwrap_or(0);
         Error::runtime(format!("[line {}] {}", line, msg.as_ref()))
     }
 
-    pub fn interpret(&mut self) -> Result {
-        self.state.ip = 0;
-        if self.debug {
+    pub fn interpret(&mut self, debug: bool) -> Result {
+        if debug {
             debug::disassembly_chunk(self.chunk, "code");
+            println!("---- execution ----");
         }
         loop {
-            if self.debug {
-                println!("{:?}", self.state.stack);
-                debug::disassembly_instruction(self.chunk, self.state.ip);
+            if debug {
+                println!("{:?}", self.stack);
+                debug::disassembly_instruction(self.chunk, self.ip);
             }
-            let instruction = self.read_byte();
-            match Opcode::check(instruction) {
-                Some(Opcode::Constant) => {
-                    let constant = self.read_constant();
-                    self.state.stack.push(constant);
-                }
-                Some(Opcode::ConstantLong) => {
-                    let constant = self.read_constant_long();
-                    self.state.stack.push(constant);
-                }
-                Some(Opcode::Nil) => self.state.stack.push(Value::nil()),
-                Some(Opcode::True) => self.state.stack.push(Value::bool(true)),
-                Some(Opcode::False) => {
-                    self.state.stack.push(Value::bool(false))
-                }
-                Some(Opcode::Equal) => {
-                    let b = self.state.stack.pop();
-                    let a = self.state.stack.pop();
-                    match (a, b) {
-                        (Some(a), Some(b)) => {
-                            self.state.stack.push(Value::bool(a == b))
-                        }
-                        _ => {
-                            return Err(
-                                self.runtime_error("Missing operand on stack")
-                            )
-                        }
-                    }
-                }
-                Some(Opcode::Greater) => {
-                    self.bin_op(|l, r| Value::bool(l > r))?
-                }
-                Some(Opcode::Less) => self.bin_op(|l, r| Value::bool(l < r))?,
-                Some(Opcode::Add) => {
-                    let b = self.state.stack.pop();
-                    let a = self.state.stack.pop();
-                    if let (Some(Value::Number(a)), Some(Value::Number(b))) =
-                        (&a, &b)
-                    {
-                        self.state.stack.push(Value::number(a + b))
-                    } else if let (Some(a), Some(b)) = (
-                        a.and_then(|v| v.into_string()),
-                        b.and_then(|v| v.into_string()),
-                    ) {
-                        self.state.stack.push(Value::string(a + &b))
-                    } else {
-                        {
-                            return Err(self.runtime_error(
-                                "Operands must be two numbers or two strings.",
-                            ));
-                        }
-                    }
-                }
-                Some(Opcode::Subtract) => {
-                    self.bin_op(|l, r| Value::number(l - r))?
-                }
-                Some(Opcode::Multiply) => {
-                    self.bin_op(|l, r| Value::number(l * r))?
-                }
-                Some(Opcode::Divide) => {
-                    self.bin_op(|l, r| Value::number(l / r))?
-                }
-                Some(Opcode::Not) => {
-                    let value = self.state.stack.pop();
-                    match value {
-                        Some(value) => self
-                            .state
-                            .stack
-                            .push(Value::bool(value.is_falsey())),
-                        None => {
-                            return Err(
-                                self.runtime_error("Missing operand on stack")
-                            )
-                        }
-                    }
-                }
-                Some(Opcode::Negate) => {
-                    let value = self.state.stack.pop();
-                    match value {
-                        Some(Value::Number(value)) => {
-                            self.state.stack.push(Value::number(-value));
-                        }
-                        Some(_) => {
-                            return Err(
-                                self.runtime_error("Operand must be a number")
-                            )
-                        }
-                        None => {
-                            return Err(
-                                self.runtime_error("Missing operand on stack")
-                            )
-                        }
-                    }
-                }
-                Some(Opcode::Return) => {
-                    println!("{:?}", self.state.stack.pop().unwrap());
-                    return Ok(());
-                }
-                None => return Err(self.runtime_error("Unimplemented opcode")),
+            match self.step()? {
+                Some(ControlFlow::Return) => return Ok(()),
+                None => {}
             }
         }
+    }
+
+    fn step(&mut self) -> Result<Option<ControlFlow>> {
+        let instruction = self.read_byte();
+        match Opcode::check(instruction) {
+            Some(Opcode::Constant) => {
+                let constant = self.read_constant();
+                self.push(constant);
+            }
+            Some(Opcode::ConstantLong) => {
+                let constant = self.read_constant_long();
+                self.push(constant);
+            }
+            Some(Opcode::Nil) => self.push(Value::nil()),
+            Some(Opcode::True) => self.push(Value::bool(true)),
+            Some(Opcode::False) => self.push(Value::bool(false)),
+            Some(Opcode::Pop) => {
+                self.pop()?;
+            }
+            Some(Opcode::GetGlobal) => {
+                let name = self.read_constant();
+                self.get_global(name)?;
+            }
+            Some(Opcode::GetGlobalLong) => {
+                let name = self.read_constant_long();
+                self.get_global(name)?;
+            }
+            Some(Opcode::DefineGlobal) => {
+                let name = self.read_constant();
+                self.define_global(name)?;
+            }
+            Some(Opcode::DefineGlobalLong) => {
+                let name = self.read_constant_long();
+                self.define_global(name)?;
+            }
+            Some(Opcode::Equal) => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.push(Value::bool(a == b))
+            }
+            Some(Opcode::Greater) => self.bin_op(|l, r| Value::bool(l > r))?,
+            Some(Opcode::Less) => self.bin_op(|l, r| Value::bool(l < r))?,
+            Some(Opcode::Add) => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                if let (Value::Number(a), Value::Number(b)) = (&a, &b) {
+                    self.push(Value::number(a + b))
+                } else if let (Some(a), Some(b)) =
+                    (a.into_string(), b.into_string())
+                {
+                    self.push(Value::string(a + &b))
+                }
+            }
+            Some(Opcode::Subtract) => {
+                self.bin_op(|l, r| Value::number(l - r))?
+            }
+            Some(Opcode::Multiply) => {
+                self.bin_op(|l, r| Value::number(l * r))?
+            }
+            Some(Opcode::Divide) => self.bin_op(|l, r| Value::number(l / r))?,
+            Some(Opcode::Not) => {
+                let value = self.pop()?;
+                self.push(Value::bool(value.is_falsey()))
+            }
+            Some(Opcode::Negate) => {
+                let value = self.pop()?;
+                match value {
+                    Value::Number(value) => {
+                        self.push(Value::number(-value));
+                    }
+                    _ => {
+                        return Err(
+                            self.runtime_error("Operand must be a number")
+                        )
+                    }
+                }
+            }
+            Some(Opcode::Print) => {
+                println!("{:?}", self.pop()?)
+            }
+            Some(Opcode::Return) => return Ok(Some(ControlFlow::Return)),
+            None => return Err(self.runtime_error("Unimplemented opcode")),
+        }
+        Ok(None)
     }
 }

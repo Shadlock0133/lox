@@ -26,6 +26,11 @@ opcodes!(
         Nil(NIL),
         True(TRUE),
         False(FALSE),
+        Pop(POP),
+        GetGlobal(GET_GLOBAL),
+        GetGlobalLong(GET_GLOBAL_LONG),
+        DefineGlobal(DEFINE_GLOBAL),
+        DefineGlobalLong(DEFINE_GLOBAL_LONG),
 
         Equal(EQUAL),
         Greater(GREATER),
@@ -37,6 +42,7 @@ opcodes!(
         Not(NOT),
         Negate(NEGATE),
 
+        Print(PRINT),
         Return(RETURN),
     }
 );
@@ -68,19 +74,53 @@ impl Chunk {
         }
     }
 
-    pub fn write_constant(&mut self, value: Value, line: usize) {
-        let index = self.add_constant(value);
-        if index <= 0xff {
-            self.write(Opcode::CONSTANT, line);
-            self.write(index as u8, line);
-        } else if index <= 0xff_ffff {
-            self.write(Opcode::CONSTANT_LONG, line);
-            for &x in index.to_le_bytes()[..3].iter() {
+    fn write_op_with_constant(
+        &mut self,
+        op_short: u8,
+        op_long: u8,
+        constant: usize,
+        line: usize,
+    ) {
+        if constant <= 0xff {
+            self.write(op_short, line);
+            self.write(constant as u8, line);
+        } else if constant <= 0xff_ffff {
+            self.write(op_long, line);
+            for &x in constant.to_le_bytes()[..3].iter() {
                 self.write(x, line);
             }
         } else {
-            panic!("index too big for constant: {}", index);
+            panic!("index too big for constant: {}", constant);
         }
+    }
+
+    pub fn write_constant(&mut self, value: Value, line: usize) -> usize {
+        let index = self.add_constant(value);
+        self.write_op_with_constant(
+            Opcode::CONSTANT,
+            Opcode::CONSTANT_LONG,
+            index,
+            line,
+        );
+        index
+    }
+
+    pub fn define_global(&mut self, name: usize, line: usize) {
+        self.write_op_with_constant(
+            Opcode::DEFINE_GLOBAL,
+            Opcode::DEFINE_GLOBAL_LONG,
+            name,
+            line,
+        );
+    }
+
+    pub fn get_global(&mut self, name: usize, line: usize) {
+        self.write_op_with_constant(
+            Opcode::GET_GLOBAL,
+            Opcode::GET_GLOBAL_LONG,
+            name,
+            line,
+        );
     }
 }
 

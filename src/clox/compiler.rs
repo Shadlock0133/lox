@@ -35,20 +35,19 @@ impl fmt::Display for TokenError {
 pub fn compile(source: &str) -> Result<Chunk, Error> {
     let mut chunk = Chunk::default();
     let mut parser = Parser::new(&source, &mut chunk);
-    match parser.expression() {
-        Ok(()) => {
-            let line = parser.last_line;
-            chunk.write(Opcode::RETURN, line);
-            Ok(chunk)
+    let mut line = 0;
+    while let Some(t) = parser.peek() {
+        line = t.line;
+        if let Err(()) = parser.declaration() {
+            break;
         }
-        Err(()) => {
-            let e = match parser.errors.len() {
-                0 => Error::UnexpectedEof,
-                1 => parser.errors.remove(0),
-                _ => Error::MultipleErrors(parser.errors),
-            };
-            Err(e)
-        }
+    }
+    let mut errors = parser.errors;
+    chunk.write(Opcode::RETURN, line);
+    match errors.len() {
+        0 => Ok(chunk),
+        1 => Err(errors.remove(0)),
+        _ => Err(Error::MultipleErrors(errors)),
     }
 }
 
@@ -56,7 +55,7 @@ struct Parser<'s, 'c> {
     scanner: Peekable<Scanner<'s>>,
     chunk: &'c mut Chunk,
     errors: Vec<Error>,
-    synchronizing: bool,
+    panic_mode: bool,
     last_line: usize,
 }
 
@@ -154,7 +153,7 @@ fn get_rule<'s, 'c>(type_: TokenType) -> Rule<'s, 'c> {
         GreaterEqual => (       None,     binary, Comparison),
         Less         => (       None,     binary, Comparison),
         LessEqual    => (       None,     binary, Comparison),
-        Identifier   => (       None,       None,       Zero),
+        Identifier   => (   variable,       None,       Zero),
         String       => (     string,       None,       Zero),
         Number       => (     number,       None,       Zero),
         And          => (       None,       None,       Zero),
@@ -183,19 +182,19 @@ impl<'s, 'c> Parser<'s, 'c> {
             scanner,
             chunk,
             errors: vec![],
-            synchronizing: false,
+            panic_mode: false,
             last_line: 0,
         }
     }
 
-    fn emit(&mut self, bytes: &[u8], line: usize) {
+    fn emit(&mut self, bytes: &[u8], token: &Token) {
         for &byte in bytes {
-            self.chunk.write(byte, line);
+            self.chunk.write(byte, token.line);
         }
     }
 
     fn error(&mut self, error: Error) -> Option<()> {
-        if !self.synchronizing {
+        if !self.panic_mode {
             self.errors.push(error);
         }
         None
@@ -221,20 +220,56 @@ impl<'s, 'c> Parser<'s, 'c> {
         Some(token)
     }
 
+    // TODO: Probably want to correctly detect Eof
+    fn match_(&mut self, type_: TokenType) -> Option<Token<'s>> {
+        if self.peek()?.type_ == type_ {
+            self.advance()
+        } else {
+            None
+        }
+    }
+
     fn consume(
         &mut self,
         type_: TokenType,
         message: &str,
     ) -> Option<Token<'s>> {
-        let token = self.advance()?;
-        if token.type_ == type_ {
-            Some(token)
-        } else {
-            self.error(Error::ParserError(TokenError(
-                token.into_owned(),
-                message.to_string(),
-            )));
-            None
+        let token = self.advance();
+        match token {
+            Some(token) if token.type_ == type_ => Some(token),
+            Some(token) => {
+                self.error(Error::ParserError(TokenError(
+                    token.into_owned(),
+                    message.to_string(),
+                )));
+                None
+            }
+            None => {
+                self.error(Error::UnexpectedEof);
+                None
+            }
+        }
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+        while self.peek().is_some() {
+            match self.peek().unwrap().type_ {
+                TokenType::Semicolon => {
+                    self.advance();
+                    return;
+                }
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => (),
+            }
+            self.advance();
         }
     }
 
@@ -254,6 +289,18 @@ impl<'s, 'c> Parser<'s, 'c> {
         let string = token.lexeme[1..token.lexeme.len() - 1].to_string();
         self.chunk.write_constant(Value::string(string), token.line);
         Ok(())
+    }
+
+    fn named_variable(&mut self, name: Token) -> Result<(), ()> {
+        let line = name.line;
+        let index = self.identifier_constant(name);
+        self.chunk.get_global(index, line);
+        Ok(())
+    }
+
+    fn variable(&mut self) -> Result<(), ()> {
+        let name = self.advance().unwrap();
+        self.named_variable(name)
     }
 
     fn literal(&mut self) -> Result<(), ()> {
@@ -292,16 +339,16 @@ impl<'s, 'c> Parser<'s, 'c> {
         self.parse_precedence(rule.precedence.left_assoc())?;
         match op.type_ {
             TokenType::BangEqual => {
-                self.emit(&[Opcode::EQUAL, Opcode::NOT], op.line)
+                self.emit(&[Opcode::EQUAL, Opcode::NOT], &op)
             }
-            TokenType::EqualEqual => self.emit(&[Opcode::EQUAL], op.line),
-            TokenType::Greater => self.emit(&[Opcode::GREATER], op.line),
+            TokenType::EqualEqual => self.emit(&[Opcode::EQUAL], &op),
+            TokenType::Greater => self.emit(&[Opcode::GREATER], &op),
             TokenType::GreaterEqual => {
-                self.emit(&[Opcode::LESS, Opcode::NOT], op.line)
+                self.emit(&[Opcode::LESS, Opcode::NOT], &op)
             }
-            TokenType::Less => self.emit(&[Opcode::LESS], op.line),
+            TokenType::Less => self.emit(&[Opcode::LESS], &op),
             TokenType::LessEqual => {
-                self.emit(&[Opcode::GREATER, Opcode::NOT], op.line)
+                self.emit(&[Opcode::GREATER, Opcode::NOT], &op)
             }
             TokenType::Plus => self.chunk.write(Opcode::ADD, op.line),
             TokenType::Minus => self.chunk.write(Opcode::SUBTRACT, op.line),
@@ -338,7 +385,75 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
+    fn identifier_constant(&mut self, name: Token) -> usize {
+        self.chunk
+            .add_constant(Value::string(name.lexeme.into_owned()))
+    }
+
+    fn parse_variable(&mut self, error_msg: &str) -> Result<usize, ()> {
+        let token = self.consume(TokenType::Identifier, error_msg).ok_or(())?;
+        Ok(self.identifier_constant(token))
+    }
+
+    fn define_variable(&mut self, global: usize, token: &Token) {
+        self.chunk.define_global(global, token.line)
+    }
+
     fn expression(&mut self) -> Result<(), ()> {
         self.parse_precedence(Precedence::Assignment)
+    }
+
+    fn declaration(&mut self) -> Result<(), ()> {
+        let ret = if let Some(var) = self.match_(TokenType::Var) {
+            self.var_declaration(var)
+        } else {
+            self.statement()
+        };
+        if ret.is_err() {
+            self.synchronize();
+        }
+        ret
+    }
+
+    fn var_declaration(&mut self, var: Token) -> Result<(), ()> {
+        let global = self.parse_variable("Expect variable name.")?;
+        if self.match_(TokenType::Equal).is_some() {
+            self.expression()?;
+        } else {
+            self.chunk.write(Opcode::NIL, var.line);
+        }
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        )
+        .ok_or(())?;
+        self.define_variable(global, &var);
+        Ok(())
+    }
+
+    fn statement(&mut self) -> Result<(), ()> {
+        if self.match_(TokenType::Print).is_some() {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<(), ()> {
+        self.expression()?;
+        let token = self
+            .consume(TokenType::Semicolon, "Expect ';' after value.")
+            .ok_or(())?;
+        self.chunk.write(Opcode::PRINT, token.line);
+        Ok(())
+    }
+
+    fn expression_statement(&mut self) -> Result<(), ()> {
+        self.expression()?;
+        let token = self
+            .consume(TokenType::Semicolon, "Expect ';' after value.")
+            .ok_or(())?;
+        self.chunk.write(Opcode::POP, token.line);
+        Ok(())
     }
 }
