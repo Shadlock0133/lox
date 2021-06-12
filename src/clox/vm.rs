@@ -19,20 +19,23 @@ pub struct VmState {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
-    #[error("Compile error")]
-    Compile,
-    #[error("Runtime error")]
-    Runtime,
+    #[error("Stack underflow")]
+    StackUnderflow,
+    #[error("Undefined variable {0}.")]
+    UndefinedVariable(String),
+    #[error("Global name isn't a string")]
+    NonStringGlobalName,
+    #[error("Operand muust be a number.")]
+    ExpectedNumber,
+    #[error("Unknown opcode: {0:#x}")]
+    UnknownOpcode(u8),
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("{0}: {1}")]
-pub struct Error(ErrorKind, String);
-
-impl Error {
-    fn runtime(msg: impl Into<String>) -> Self {
-        Self(ErrorKind::Runtime, msg.into())
-    }
+#[error("[line {line}] {kind}")]
+pub struct Error {
+    kind: ErrorKind,
+    line: usize,
 }
 
 type Result<T = ()> = std::result::Result<T, Error>;
@@ -77,7 +80,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
     fn pop(&mut self) -> Result<Value> {
         self.stack
             .pop()
-            .ok_or_else(|| self.runtime_error("Missing operand on stack"))
+            .ok_or_else(|| self.report(ErrorKind::StackUnderflow))
     }
 
     fn get_global(&mut self, name: Value) -> Result {
@@ -88,11 +91,12 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                     self.push(value);
                     Ok(())
                 }
-                None => Err(self
-                    .runtime_error(format!("Undefined variable {}", name.0))),
+                None => Err(self.report(ErrorKind::UndefinedVariable(
+                    name.0.clone().into_string(),
+                ))),
             }
         } else {
-            Err(self.runtime_error("Global name isn't a string."))
+            Err(self.report(ErrorKind::NonStringGlobalName))
         }
     }
 
@@ -102,7 +106,7 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
             self.state.globals.insert(name, value);
             Ok(())
         } else {
-            Err(self.runtime_error("Global name isn't a string."))
+            Err(self.report(ErrorKind::NonStringGlobalName))
         }
     }
 
@@ -114,13 +118,13 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 self.push(op(a, b));
                 Ok(())
             }
-            _ => Err(self.runtime_error("Operands must be numbers.")),
+            _ => Err(self.report(ErrorKind::ExpectedNumber)),
         }
     }
 
-    fn runtime_error(&self, msg: impl AsRef<str>) -> Error {
+    fn report(&self, kind: ErrorKind) -> Error {
         let line = self.chunk.get_line(self.ip - 1).unwrap_or(0);
-        Error::runtime(format!("[line {}] {}", line, msg.as_ref()))
+        Error { kind, line }
     }
 
     pub fn interpret(&mut self, debug: bool) -> Result {
@@ -208,18 +212,16 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                     Value::Number(value) => {
                         self.push(Value::number(-value));
                     }
-                    _ => {
-                        return Err(
-                            self.runtime_error("Operand must be a number")
-                        )
-                    }
+                    _ => return Err(self.report(ErrorKind::ExpectedNumber)),
                 }
             }
             Some(Opcode::Print) => {
                 println!("{:?}", self.pop()?)
             }
             Some(Opcode::Return) => return Ok(Some(ControlFlow::Return)),
-            None => return Err(self.runtime_error("Unimplemented opcode")),
+            None => {
+                return Err(self.report(ErrorKind::UnknownOpcode(instruction)))
+            }
         }
         Ok(None)
     }
