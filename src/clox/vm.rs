@@ -83,6 +83,12 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
             .ok_or_else(|| self.report(ErrorKind::StackUnderflow))
     }
 
+    fn top(&self) -> Result<&Value> {
+        self.stack
+            .last()
+            .ok_or_else(|| self.report(ErrorKind::StackUnderflow))
+    }
+
     fn get_global(&mut self, name: Value) -> Result {
         if let Some(name) = name.into_obj_string() {
             match self.state.globals.get(&name) {
@@ -105,6 +111,23 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
         if let Some(name) = name.into_obj_string() {
             self.state.globals.insert(name, value);
             Ok(())
+        } else {
+            Err(self.report(ErrorKind::NonStringGlobalName))
+        }
+    }
+
+    fn set_global(&mut self, name: Value) -> Result {
+        if let Some(name) = name.into_obj_string() {
+            let top = self.top()?.clone();
+            match self.state.globals.get_mut(&name) {
+                Some(global) => {
+                    *global = top;
+                    Ok(())
+                }
+                None => Err(self.report(ErrorKind::UndefinedVariable(
+                    name.0.clone().into_string(),
+                ))),
+            }
         } else {
             Err(self.report(ErrorKind::NonStringGlobalName))
         }
@@ -176,6 +199,14 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
             Some(Opcode::DefineGlobalLong) => {
                 let name = self.read_constant_long();
                 self.define_global(name)?;
+            }
+            Some(Opcode::SetGlobal) => {
+                let name = self.read_constant();
+                self.set_global(name)?;
+            }
+            Some(Opcode::SetGlobalLong) => {
+                let name = self.read_constant_long();
+                self.set_global(name)?;
             }
             Some(Opcode::Equal) => {
                 let b = self.pop()?;

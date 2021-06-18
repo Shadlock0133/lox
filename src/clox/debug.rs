@@ -81,6 +81,12 @@ pub fn disassembly_instruction(chunk: &Chunk, offset: usize) -> usize {
         Some(Opcode::DefineGlobalLong) => {
             constant_long_instruction("OP_DEFINE_GLOBAL_LONG", chunk, offset)
         }
+        Some(Opcode::SetGlobal) => {
+            constant_instruction("OP_SET_GLOBAL", chunk, offset)
+        }
+        Some(Opcode::SetGlobalLong) => {
+            constant_long_instruction("OP_SET_GLOBAL_LONG", chunk, offset)
+        }
 
         Some(Opcode::Equal) => simple_instruction("OP_EQUAL", chunk, offset),
         Some(Opcode::Greater) => {

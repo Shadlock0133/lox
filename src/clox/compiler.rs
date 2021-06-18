@@ -13,8 +13,8 @@ pub enum Error {
     ScannerError(#[from] scanner::Error),
     #[error("{0}")]
     ParserError(#[from] TokenError),
-    #[error("Multiple errors: {0:?}")]
-    MultipleErrors(Vec<Error>),
+    #[error("{0}")]
+    MultipleErrors(#[from] MulipleErrors),
     #[error("Unexpected EOF")]
     UnexpectedEof,
 }
@@ -29,6 +29,19 @@ impl fmt::Display for TokenError {
             "[Line {}] Parser error at '{}': {}",
             self.0.line, self.0.lexeme, self.1
         )
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub struct MulipleErrors(Vec<Error>);
+
+impl fmt::Display for MulipleErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Multiple errors:")?;
+        for error in &self.0 {
+            write!(f, "\n    {}", error)?;
+        }
+        Ok(())
     }
 }
 
@@ -47,7 +60,7 @@ pub fn compile(source: &str) -> Result<Chunk, Error> {
     match errors.len() {
         0 => Ok(chunk),
         1 => Err(errors.remove(0)),
-        _ => Err(Error::MultipleErrors(errors)),
+        _ => Err(MulipleErrors(errors).into()),
     }
 }
 
@@ -92,7 +105,7 @@ impl Precedence {
     }
 }
 
-type ParseFn<'s, 'c> = fn(&mut Parser<'s, 'c>) -> Result<(), ()>;
+type ParseFn<'s, 'c> = fn(&mut Parser<'s, 'c>, bool) -> Result<(), ()>;
 
 struct Rule<'s, 'c> {
     prefix: Option<ParseFn<'s, 'c>>,
@@ -273,7 +286,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         }
     }
 
-    fn number(&mut self) -> Result<(), ()> {
+    fn number(&mut self, _can_assign: bool) -> Result<(), ()> {
         let token = self.advance().unwrap();
         let line = token.line;
         let value = token.lexeme.parse::<f64>().map_err(|e| {
@@ -284,26 +297,37 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
-    fn string(&mut self) -> Result<(), ()> {
+    fn string(&mut self, _can_assign: bool) -> Result<(), ()> {
         let token = self.advance().unwrap();
         let string = token.lexeme[1..token.lexeme.len() - 1].to_string();
         self.chunk.write_constant(Value::string(string), token.line);
         Ok(())
     }
 
-    fn named_variable(&mut self, name: Token) -> Result<(), ()> {
+    fn named_variable(
+        &mut self,
+        name: Token,
+        can_assign: bool,
+    ) -> Result<(), ()> {
         let line = name.line;
         let index = self.identifier_constant(name);
-        self.chunk.get_global(index, line);
+
+        if can_assign && self.match_(TokenType::Equal).is_some() {
+            self.expression()?;
+            self.chunk.set_global(index, line);
+        } else {
+            self.chunk.get_global(index, line);
+        }
+
         Ok(())
     }
 
-    fn variable(&mut self) -> Result<(), ()> {
+    fn variable(&mut self, can_assign: bool) -> Result<(), ()> {
         let name = self.advance().unwrap();
-        self.named_variable(name)
+        self.named_variable(name, can_assign)
     }
 
-    fn literal(&mut self) -> Result<(), ()> {
+    fn literal(&mut self, _can_assign: bool) -> Result<(), ()> {
         let token = self.advance().unwrap();
         match token.type_ {
             TokenType::Nil => self.chunk.write(Opcode::NIL, token.line),
@@ -314,7 +338,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
-    fn grouping(&mut self) -> Result<(), ()> {
+    fn grouping(&mut self, _can_assign: bool) -> Result<(), ()> {
         self.advance().unwrap();
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after expression.")
@@ -322,7 +346,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
-    fn unary(&mut self) -> Result<(), ()> {
+    fn unary(&mut self, _can_assign: bool) -> Result<(), ()> {
         let token = self.advance().unwrap();
         self.parse_precedence(Precedence::Call)?;
         match token.type_ {
@@ -333,7 +357,7 @@ impl<'s, 'c> Parser<'s, 'c> {
         Ok(())
     }
 
-    fn binary(&mut self) -> Result<(), ()> {
+    fn binary(&mut self, _can_assign: bool) -> Result<(), ()> {
         let op = self.advance().unwrap();
         let rule = get_rule(op.type_);
         self.parse_precedence(rule.precedence.left_assoc())?;
@@ -361,16 +385,19 @@ impl<'s, 'c> Parser<'s, 'c> {
 
     fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), ()> {
         let token = self.peek().ok_or(())?;
-        match get_rule(token.type_).prefix {
-            Some(f) => f(self)?,
+        let prefix = match get_rule(token.type_).prefix {
+            Some(f) => f,
             None => {
                 let token = token.clone().into_owned();
-                self.errors.push(
+                self.error(
                     TokenError(token, "Expect expression".to_string()).into(),
                 );
                 return Err(());
             }
-        }
+        };
+
+        let can_assign = precedence <= Precedence::Assignment;
+        prefix(self, can_assign)?;
 
         while let Some(token) = self.peek() {
             let rule = get_rule(token.type_);
@@ -378,7 +405,17 @@ impl<'s, 'c> Parser<'s, 'c> {
                 break;
             }
             if let Some(f) = rule.infix {
-                f(self)?
+                f(self, can_assign)?
+            }
+        }
+
+        if can_assign {
+            if let Some(token) = self.match_(TokenType::Equal) {
+                let token = token.clone().into_owned();
+                self.error(
+                    TokenError(token, "Invalid assignment target.".into())
+                        .into(),
+                );
             }
         }
 

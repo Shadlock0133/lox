@@ -31,6 +31,8 @@ opcodes!(
         GetGlobalLong(GET_GLOBAL_LONG),
         DefineGlobal(DEFINE_GLOBAL),
         DefineGlobalLong(DEFINE_GLOBAL_LONG),
+        SetGlobal(SET_GLOBAL),
+        SetGlobalLong(SET_GLOBAL_LONG),
 
         Equal(EQUAL),
         Greater(GREATER),
@@ -111,6 +113,14 @@ impl Chunk {
             line,
         );
         index
+    }
+    pub fn set_global(&mut self, name: ConstantIndex, line: usize) {
+        self.write_op_with_constant(
+            Opcode::SET_GLOBAL,
+            Opcode::SET_GLOBAL_LONG,
+            name,
+            line,
+        );
     }
 
     pub fn define_global(&mut self, name: ConstantIndex, line: usize) {
