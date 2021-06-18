@@ -160,9 +160,8 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                 println!("{:?}", self.stack);
                 debug::disassembly_instruction(self.chunk, self.ip);
             }
-            match self.step()? {
-                Some(ControlFlow::Return) => return Ok(()),
-                None => {}
+            if let Some(ControlFlow::Return) = self.step()? {
+                return Ok(());
             }
         }
     }

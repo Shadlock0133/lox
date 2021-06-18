@@ -40,8 +40,8 @@ fn main() -> Result<()> {
             Some(path) if opt.test && path.is_file() => JLox::run_test(path)?,
             Some(path) if opt.test && path.is_dir() => JLox::run_tests(path)?,
             None if opt.test => JLox::run_tests("./tests")?,
-            Some(file) => JLox::new().run_file(file)?,
-            None => JLox::new().run_repl()?,
+            Some(file) => JLox::default().run_file(file)?,
+            None => JLox::default().run_repl()?,
         },
         Backend::CLox => match opt.input {
             Some(path) => CLox::new(opt.debug).run_file(path)?,

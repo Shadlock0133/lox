@@ -41,7 +41,7 @@ pub struct RuntimeError(GenericError);
 pub type RuntimeResult<T> = Result<T, ControlFlow>;
 
 impl RuntimeError {
-    pub fn new<S: Into<String>>(
+    pub fn wrapped<S: Into<String>>(
         token: Option<&Token>,
         message: S,
     ) -> ControlFlow {

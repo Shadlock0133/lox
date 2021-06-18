@@ -62,13 +62,15 @@ pub struct JLox {
     interpreter: Interpreter<'static>,
 }
 
-impl JLox {
-    pub fn new() -> Self {
+impl Default for JLox {
+    fn default() -> Self {
         Self {
             interpreter: Interpreter::new(std::io::stdout()),
         }
     }
+}
 
+impl JLox {
     pub fn run_test<A: AsRef<Path>>(path: A) -> Result<()> {
         test_framework::run_test(path)
     }

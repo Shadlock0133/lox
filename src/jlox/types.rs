@@ -255,7 +255,7 @@ impl LoxFunction {
 
     pub fn bind(&self, instance: &ValueRef) -> RuntimeResult<Self> {
         if !instance.is_instance() {
-            return Err(RuntimeError::new(
+            return Err(RuntimeError::wrapped(
                 Some(&self.declaration.name),
                 "Trying to bind method without instance",
             ));
@@ -337,7 +337,7 @@ impl Instance {
             ))));
         }
 
-        Err(RuntimeError::new(
+        Err(RuntimeError::wrapped(
             Some(name),
             format!("Undefined property '{}'.", name.lexeme),
         ))

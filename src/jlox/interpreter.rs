@@ -35,7 +35,7 @@ impl fmt::Debug for Interpreter<'_> {
 
 impl<'a> Interpreter<'a> {
     pub fn new<W: Write + 'a>(output: W) -> Self {
-        let mut global = Environment::new();
+        let mut global = Environment::default();
 
         global.define(
             "clock".into(),
@@ -50,7 +50,7 @@ impl<'a> Interpreter<'a> {
         global.define(
             "panic".into(),
             ValueRef::fun(0, |_, _| {
-                Err(RuntimeError::new(None, "Explicit panic"))
+                Err(RuntimeError::wrapped(None, "Explicit panic"))
             }),
         );
 
@@ -132,7 +132,7 @@ impl<'a> Interpreter<'a> {
                 ) -> RuntimeResult<ValueRef> {
                     match (l.value(), r.value()) {
                         (Value::Number(l), Value::Number(r)) => Ok(f(l, r)),
-                        _ => Err(RuntimeError::new(
+                        _ => Err(RuntimeError::wrapped(
                             Some(op),
                             "Operands must be numbers.",
                         )),
@@ -167,7 +167,7 @@ impl<'a> Interpreter<'a> {
                         (Value::String(l), Value::String(r)) => {
                             Ok(ValueRef::from_value(Value::String(l + &r)))
                         }
-                        _ => Err(RuntimeError::new(
+                        _ => Err(RuntimeError::wrapped(
                             Some(op),
                             "Operands must be two numbers or two strings.",
                         )),
@@ -206,7 +206,7 @@ impl<'a> Interpreter<'a> {
                     TokenType::BangEqual => {
                         Ok(ValueRef::from_value(Value::Bool(left != right)))
                     }
-                    _ => Err(RuntimeError::new(
+                    _ => Err(RuntimeError::wrapped(
                         Some(op),
                         "Invalid binary operator.",
                     )),
@@ -225,7 +225,7 @@ impl<'a> Interpreter<'a> {
                     .collect::<Result<_, _>>()?;
 
                 let wrong_arity = |e| {
-                    Err(RuntimeError::new(
+                    Err(RuntimeError::wrapped(
                         Some(right_paren),
                         format!(
                             "Expected {} arguments but got {}.",
@@ -254,7 +254,7 @@ impl<'a> Interpreter<'a> {
                             None => wrong_arity(0),
                         }
                     }
-                    _ => Err(RuntimeError::new(
+                    _ => Err(RuntimeError::wrapped(
                         Some(right_paren),
                         "Can only call functions and classes.",
                     )),
@@ -267,7 +267,7 @@ impl<'a> Interpreter<'a> {
                 if let Value::Instance(instance) = value {
                     instance.get(&object, name)
                 } else {
-                    Err(RuntimeError::new(
+                    Err(RuntimeError::wrapped(
                         Some(name),
                         "Only instances have properties.",
                     ))
@@ -290,7 +290,7 @@ impl<'a> Interpreter<'a> {
                     instance.set(name, value.clone());
                     Ok(value)
                 } else {
-                    Err(RuntimeError::new(
+                    Err(RuntimeError::wrapped(
                         Some(name),
                         "Only instances have fields.",
                     ))
@@ -302,13 +302,13 @@ impl<'a> Interpreter<'a> {
                 ref method,
             } => {
                 let distance = *self.locals.get(&expr).ok_or_else(|| {
-                    RuntimeError::new(Some(keyword), "Missing superclass")
+                    RuntimeError::wrapped(Some(keyword), "Missing superclass")
                 })?;
                 let superclass = self.current.get_at_str(distance, "super")?;
                 let class = match superclass.value() {
                     Value::Class(class) => class,
                     _ => {
-                        return Err(RuntimeError::new(
+                        return Err(RuntimeError::wrapped(
                             Some(keyword),
                             "'super' is not a class",
                         ))
@@ -318,7 +318,7 @@ impl<'a> Interpreter<'a> {
                 let method = class
                     .find_method(&method.lexeme)
                     .ok_or_else(|| {
-                        RuntimeError::new(
+                        RuntimeError::wrapped(
                             Some(method),
                             format!("Undefined property '{}'.", method.lexeme),
                         )
@@ -337,7 +337,7 @@ impl<'a> Interpreter<'a> {
                     TokenType::Minus => {
                         let value =
                             value.value().as_number().ok_or_else(|| {
-                                RuntimeError::new(
+                                RuntimeError::wrapped(
                                     Some(op),
                                     "Operand must be a number.",
                                 )
@@ -348,7 +348,7 @@ impl<'a> Interpreter<'a> {
                         !value.value().is_truthy(),
                     )),
                     _ => {
-                        return Err(RuntimeError::new(
+                        return Err(RuntimeError::wrapped(
                             Some(op),
                             "Unary expression must contain '-' or '!'.",
                         ))
@@ -382,7 +382,7 @@ impl<'a> Interpreter<'a> {
                         ))?;
                         match value.value() {
                             Value::Class(class) => Ok((value, class)),
-                            _ => Err(RuntimeError::new(
+                            _ => Err(RuntimeError::wrapped(
                                 Some(superclass),
                                 "Superclass must be a class.",
                             )),
@@ -450,7 +450,7 @@ impl<'a> Interpreter<'a> {
             Stmt::PrintStmt { expr } => {
                 let value = self.visit_expr(expr)?;
                 writeln!(self.output, "{}", value.value())
-                    .map_err(|e| RuntimeError::new(None, e.to_string()))
+                    .map_err(|e| RuntimeError::wrapped(None, e.to_string()))
             }
 
             Stmt::Return { keyword: _, value } => Err(ControlFlow::Return(

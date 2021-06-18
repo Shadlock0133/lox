@@ -64,13 +64,15 @@ impl Inner {
     }
 }
 
-impl Environment {
-    pub fn new() -> Self {
+impl Default for Environment {
+    fn default() -> Self {
         Self {
             inner: Default::default(),
         }
     }
+}
 
+impl Environment {
     pub fn enclose(&self) -> Self {
         Self {
             inner: Arc::new(RwLock::new(Inner::new(self.clone()))),
@@ -105,7 +107,7 @@ impl Environment {
         } else if let Some(ref mut en) = write.enclosing {
             en.assign(name, value)
         } else {
-            Err(RuntimeError::new(
+            Err(RuntimeError::wrapped(
                 Some(name),
                 format!("Undefined variable '{}'.", name.lexeme),
             ))
@@ -121,13 +123,13 @@ impl Environment {
         *self
             .ancestor(distance)
             .ok_or_else(|| {
-                RuntimeError::new(Some(name), "Non-existent env ancestor")
+                RuntimeError::wrapped(Some(name), "Non-existent env ancestor")
             })?
             .write()
             .values
             .get_mut(&name.lexeme)
             .ok_or_else(|| {
-                RuntimeError::new(
+                RuntimeError::wrapped(
                     Some(name),
                     format!("Missing variable at {} dist", distance),
                 )
@@ -141,7 +143,7 @@ impl Environment {
         } else if let Some(en) = &self.read().enclosing {
             en.get(name)
         } else {
-            Err(RuntimeError::new(
+            Err(RuntimeError::wrapped(
                 Some(name),
                 format!("Undefined variable '{}'.", name.lexeme),
             ))
@@ -172,13 +174,13 @@ impl Environment {
     ) -> RuntimeResult<ValueRef> {
         self.ancestor(distance)
             .ok_or_else(|| {
-                RuntimeError::new(token, "Non-existent env ancestor")
+                RuntimeError::wrapped(token, "Non-existent env ancestor")
             })?
             .read()
             .values
             .get(name)
             .ok_or_else(|| {
-                RuntimeError::new(
+                RuntimeError::wrapped(
                     token,
                     format!("Missing variable at {} dist", distance),
                 )
