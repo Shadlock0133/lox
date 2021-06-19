@@ -25,8 +25,10 @@ pub enum ErrorKind {
     UndefinedVariable(String),
     #[error("Global name isn't a string")]
     NonStringGlobalName,
-    #[error("Operand muust be a number.")]
+    #[error("Operand must be a number.")]
     ExpectedNumber,
+    #[error("Operands must be a numbers or strings.")]
+    ExpectedNumbersOrStrings,
     #[error("Unknown opcode: {0:#x}")]
     UnknownOpcode(u8),
 }
@@ -223,6 +225,10 @@ impl<'chunk, 'state> Vm<'chunk, 'state> {
                     (a.into_string(), b.into_string())
                 {
                     self.push(Value::string(a + &b))
+                } else {
+                    return Err(
+                        self.report(ErrorKind::ExpectedNumbersOrStrings)
+                    );
                 }
             }
             Some(Opcode::Subtract) => {
